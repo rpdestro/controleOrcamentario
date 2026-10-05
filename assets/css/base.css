@@ -1,0 +1,164 @@
+/* ==========================================================================
+   base.css — Tokens de design, reset e tipografia
+   ========================================================================== */
+
+:root {
+  /* Cores institucionais */
+  --cor-primaria: #0b4f8a;
+  --cor-primaria-escura: #083a66;
+  --cor-primaria-clara: #e6f0fa;
+  --cor-acento: #f2b705;
+
+  /* Superfícies e texto */
+  --cor-fundo: #f3f5f8;
+  --cor-superficie: #ffffff;
+  --cor-superficie-alt: #f8fafc;
+  --cor-borda: #d7dde5;
+  --cor-texto: #1d2733;
+  --cor-texto-suave: #5b6878;
+
+  /* Semânticas */
+  --cor-positivo: #1b7a3d;
+  --cor-positivo-fundo: #e7f5ec;
+  --cor-negativo: #b42318;
+  --cor-negativo-fundo: #fdecea;
+  --cor-aviso: #8a5a00;
+  --cor-aviso-fundo: #fff6dd;
+  --cor-info: #0b4f8a;
+  --cor-info-fundo: #e6f0fa;
+
+  /* Espaçamento, raio, sombra */
+  --esp-1: 0.25rem;
+  --esp-2: 0.5rem;
+  --esp-3: 0.75rem;
+  --esp-4: 1rem;
+  --esp-5: 1.5rem;
+  --esp-6: 2rem;
+  --raio: 8px;
+  --raio-pequeno: 4px;
+  --sombra: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.1);
+  --sombra-forte: 0 12px 32px rgba(16, 24, 40, 0.24);
+
+  /* Tipografia */
+  --fonte: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+  --fonte-num: "Segoe UI", system-ui, sans-serif;
+  --tam-xs: 0.75rem;
+  --tam-sm: 0.875rem;
+  --tam-md: 1rem;
+  --tam-lg: 1.25rem;
+  --tam-xl: 1.5rem;
+
+  /* Superfícies de destaque (cabeçalho da app e das tabelas) */
+  --cor-header: #0b4f8a;
+  --cor-tabela-cabecalho: #0b4f8a;
+  --cor-tabela-cabecalho-texto: #ffffff;
+
+  /* Cores sólidas para preenchimentos com texto branco (iguais nos dois temas) */
+  --cor-solida-sucesso: #1b7a3d;
+  --cor-solida-erro: #b42318;
+  --cor-solida-info: #0b4f8a;
+  --cor-solida-aviso: #6b4700;
+
+  /* Layout */
+  --largura-nav: 280px;
+  --altura-header: 64px;
+  --foco: 0 0 0 3px rgba(242, 183, 5, 0.6);
+
+  color-scheme: light;
+}
+
+/* ---------- Modo escuro (ativado por assets/js/ui/tema.js) ---------- */
+:root[data-tema="escuro"] {
+  --cor-primaria: #6cb2f0;
+  --cor-primaria-escura: #9ccbf5;
+  --cor-primaria-clara: #1a3350;
+
+  --cor-fundo: #0e141b;
+  --cor-superficie: #161f29;
+  --cor-superficie-alt: #1c2733;
+  --cor-borda: #2d3b4a;
+  --cor-texto: #e4ebf2;
+  --cor-texto-suave: #9fb0c2;
+
+  --cor-positivo: #5fd08a;
+  --cor-positivo-fundo: #13301f;
+  --cor-negativo: #ff8a80;
+  --cor-negativo-fundo: #3b1717;
+  --cor-aviso: #f0c24b;
+  --cor-aviso-fundo: #36290a;
+  --cor-info: #6cb2f0;
+  --cor-info-fundo: #132a42;
+
+  --cor-header: #0a2540;
+  --cor-tabela-cabecalho: #123b63;
+
+  --sombra: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.5);
+  --sombra-forte: 0 12px 32px rgba(0, 0, 0, 0.6);
+
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--fonte);
+  font-size: var(--tam-md);
+  line-height: 1.5;
+  color: var(--cor-texto);
+  background: var(--cor-fundo);
+}
+
+h1, h2, h3, p, dl, dd, ul, figure, blockquote {
+  margin: 0;
+}
+
+ul {
+  padding: 0;
+  list-style: none;
+}
+
+a {
+  color: var(--cor-primaria);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--foco);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* Link de acessibilidade "pular para o conteúdo" */
+.pular-conteudo {
+  position: absolute;
+  left: var(--esp-4);
+  top: -100px;
+  z-index: 100;
+  padding: var(--esp-2) var(--esp-4);
+  background: var(--cor-acento);
+  color: #000;
+  border-radius: var(--raio-pequeno);
+}
+
+.pular-conteudo:focus {
+  top: var(--esp-2);
+}

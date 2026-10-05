@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Testes · Planejamento e Orçamento</title>
+  <link rel="stylesheet" href="runner/test-runner.css">
+</head>
+<body>
+  <header class="cabecalho">
+    <h1>Testes automatizados</h1>
+    <p class="resumo" data-testid="resumo-testes" aria-live="polite">Executando…</p>
+  </header>
+  <main id="resultados" data-testid="resultados-testes"></main>
+
+  <!-- Código da aplicação (somente módulos sem DOM) -->
+  <script src="../assets/js/core/namespace.js"></script>
+  <script src="../assets/js/core/config.js"></script>
+  <script src="../assets/js/core/events.js"></script>
+  <script src="../assets/js/utils/format.js"></script>
+  <script src="../assets/js/utils/periodo.js"></script>
+  <script src="../assets/js/utils/validators.js"></script>
+  <script src="../assets/js/utils/filtroTabela.js"></script>
+  <script src="../assets/js/data/schema.js"></script>
+  <script src="../assets/js/data/calculos.js"></script>
+  <script src="../assets/js/data/importer.js"></script>
+  <script src="../assets/js/data/exporter.js"></script>
+  <script src="../assets/js/data/fiorilli.js"></script>
+
+  <!-- Executor e especificações -->
+  <script src="runner/test-runner.js"></script>
+  <script src="specs/utils.spec.js"></script>
+  <script src="specs/dados.spec.js"></script>
+  <script src="specs/v11.spec.js"></script>
+  <script src="runner/executar.js"></script>
+</body>
+</html>

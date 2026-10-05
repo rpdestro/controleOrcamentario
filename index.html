@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Planejamento e Orçamento — Prefeitura Municipal de Botucatu">
+  <title>Planejamento e Orçamento · Botucatu</title>
+
+  <!-- CSS: separado por responsabilidade -->
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/layout.css">
+  <link rel="stylesheet" href="assets/css/components.css">
+  <link rel="stylesheet" href="assets/css/modules.css">
+  <link rel="stylesheet" href="assets/css/print.css" media="print">
+
+  <!-- Tema: carregado sem "defer" para aplicar o modo escuro antes da primeira pintura -->
+  <script src="assets/js/core/namespace.js"></script>
+  <script src="assets/js/core/config.js"></script>
+  <script src="assets/js/ui/tema.js"></script>
+</head>
+<body class="app">
+  <a class="pular-conteudo" href="#conteudo" data-testid="link-pular-conteudo">Pular para o conteúdo</a>
+
+  <!-- Cabeçalho -->
+  <header class="app-header" data-testid="app-header">
+    <button class="app-header__menu btn btn--fantasma" type="button" aria-controls="navegacao" aria-expanded="false" aria-label="Abrir menu" data-testid="btn-menu">☰</button>
+
+    <div class="app-header__marca">
+      <p class="app-header__orgao">Prefeitura Municipal de Botucatu</p>
+      <p class="app-header__titulo">
+        Planejamento e Orçamento
+        <span class="app-header__versao" data-versao data-testid="app-versao"></span>
+      </p>
+    </div>
+
+    <p class="app-header__status" data-testid="status-base" aria-live="polite"></p>
+
+    <div class="app-header__acoes">
+      <button class="btn btn--secundario" type="button" data-testid="btn-importar">Importar planilha</button>
+      <button class="btn btn--secundario" type="button" data-testid="btn-fiorilli">Atualizar Fiorilli</button>
+      <button class="btn btn--primario" type="button" data-testid="btn-salvar-base">Salvar base Excel</button>
+      <button class="btn btn--fantasma app-header__tema" type="button" aria-pressed="false" data-testid="btn-tema">
+        <span class="app-header__tema-icone" aria-hidden="true">🌙</span>
+        <span class="app-header__tema-texto">Modo escuro</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="app-shell">
+    <!-- Navegação: preenchida por assets/js/ui/nav.js -->
+    <nav class="app-nav" id="navegacao" aria-label="Navegação principal" data-testid="app-nav"></nav>
+
+    <!-- Conteúdo: módulos renderizados pelo roteador (assets/js/ui/router.js) -->
+    <main class="app-main" id="conteudo" tabindex="-1" data-testid="app-main"></main>
+  </div>
+
+  <footer class="app-footer" data-testid="app-footer">
+    <p>Prefeitura Municipal de Botucatu · Planejamento e Orçamento <span data-versao data-testid="rodape-versao"></span> · Dados armazenados localmente neste navegador.</p>
+  </footer>
+
+  <!-- Camadas globais de UI -->
+  <dialog class="modal" id="modal" data-testid="modal"></dialog>
+  <div class="toasts" id="toasts" aria-live="polite" data-testid="toasts"></div>
+
+  <!-- Biblioteca de planilhas (SheetJS). Para uso offline, veja o README. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+
+  <!-- Núcleo (namespace/config já carregados no <head>) -->
+  <script src="assets/js/core/events.js" defer></script>
+  <!-- Utilitários (funções puras) -->
+  <script src="assets/js/utils/format.js" defer></script>
+  <script src="assets/js/utils/periodo.js" defer></script>
+  <script src="assets/js/utils/dom.js" defer></script>
+  <script src="assets/js/utils/validators.js" defer></script>
+  <script src="assets/js/utils/filtroTabela.js" defer></script>
+  <!-- Dados -->
+  <script src="assets/js/data/schema.js" defer></script>
+  <script src="assets/js/data/calculos.js" defer></script>
+  <script src="assets/js/data/importer.js" defer></script>
+  <script src="assets/js/data/exporter.js" defer></script>
+  <script src="assets/js/data/fiorilli.js" defer></script>
+  <script src="assets/js/data/store.js" defer></script>
+  <script src="assets/js/data/fileService.js" defer></script>
+  <!-- Interface -->
+  <script src="assets/js/ui/toast.js" defer></script>
+  <script src="assets/js/ui/modal.js" defer></script>
+  <script src="assets/js/ui/filtroColuna.js" defer></script>
+  <script src="assets/js/ui/componentes.js" defer></script>
+  <script src="assets/js/ui/router.js" defer></script>
+  <script src="assets/js/ui/nav.js" defer></script>
+  <!-- Módulos -->
+  <script src="assets/js/modules/importar.js" defer></script>
+  <script src="assets/js/modules/fiorilli.js" defer></script>
+  <script src="assets/js/modules/painel.js" defer></script>
+  <script src="assets/js/modules/secretaria.js" defer></script>
+  <script src="assets/js/modules/relatorios.js" defer></script>
+  <script src="assets/js/modules/exportar.js" defer></script>
+  <script src="assets/js/modules/configuracoes.js" defer></script>
+  <!-- Inicialização -->
+  <script src="assets/js/app.js" defer></script>
+</body>
+</html>

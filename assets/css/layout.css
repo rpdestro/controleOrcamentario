@@ -1,0 +1,234 @@
+/* ==========================================================================
+   layout.css — Estrutura da aplicação (header, navegação, conteúdo, footer)
+   ========================================================================== */
+
+.app {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: var(--altura-header) 1fr auto;
+}
+
+/* ---------- Cabeçalho ---------- */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: var(--esp-4);
+  padding: 0 var(--esp-5);
+  background: var(--cor-header);
+  color: #fff;
+  box-shadow: var(--sombra);
+}
+
+/* Seletor composto: precisa vencer a cor de .btn--fantasma (components.css). */
+.app-header .app-header__menu {
+  display: none;
+  color: #fff;
+  font-size: var(--tam-lg);
+}
+
+.app-header__marca {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.app-header__orgao {
+  font-size: var(--tam-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.85;
+}
+
+.app-header__titulo {
+  font-size: var(--tam-lg);
+  font-weight: 700;
+}
+
+.app-header__versao {
+  display: inline-block;
+  margin-left: var(--esp-1);
+  padding: 0 var(--esp-2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  font-size: var(--tam-xs);
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+/* Botão de tema: seletor composto vence a cor de .btn--fantasma */
+.app-header .app-header__tema {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.app-header .app-header__tema:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.app-header .app-header__tema[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.app-header__status {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--tam-xs);
+  opacity: 0.85;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-header__acoes {
+  display: flex;
+  gap: var(--esp-2);
+}
+
+/* ---------- Corpo (navegação + conteúdo) ---------- */
+.app-shell {
+  display: grid;
+  grid-template-columns: var(--largura-nav) minmax(0, 1fr);
+  min-height: 0;
+}
+
+.app-nav {
+  position: sticky;
+  top: var(--altura-header);
+  height: calc(100vh - var(--altura-header));
+  overflow-y: auto;
+  padding: var(--esp-4) var(--esp-3);
+  background: var(--cor-superficie);
+  border-right: 1px solid var(--cor-borda);
+}
+
+.app-main {
+  padding: var(--esp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-5);
+  min-width: 0;
+}
+
+.app-main:focus {
+  outline: none;
+}
+
+.app-footer {
+  padding: var(--esp-3) var(--esp-5);
+  font-size: var(--tam-xs);
+  color: var(--cor-texto-suave);
+  border-top: 1px solid var(--cor-borda);
+  background: var(--cor-superficie);
+}
+
+/* ---------- Grades utilitárias ---------- */
+.grade-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: var(--esp-5);
+  align-items: start;
+}
+
+/* ---------- Responsivo ---------- */
+@media (max-width: 960px) {
+  .app-header {
+    padding: 0 var(--esp-4);
+  }
+
+  .app-header .app-header__menu {
+    display: inline-flex;
+  }
+
+  .app-header__status {
+    display: none;
+  }
+
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .app-nav {
+    position: fixed;
+    left: 0;
+    top: var(--altura-header);
+    z-index: 15;
+    width: min(85vw, var(--largura-nav));
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+
+  .app-nav--aberta {
+    transform: translateX(0);
+    box-shadow: var(--sombra-forte);
+  }
+
+  .app-main {
+    padding: var(--esp-4);
+  }
+}
+
+/* Telas médias: o cabeçalho passa a ter duas linhas (marca/status + ações). */
+@media (max-width: 1200px) {
+  :root {
+    --altura-header: 108px;
+  }
+
+  .app-header {
+    flex-wrap: wrap;
+    align-content: center;
+    row-gap: var(--esp-2);
+    padding: var(--esp-2) var(--esp-5);
+  }
+
+  .app-header__acoes {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 600px) {
+  :root {
+    --altura-header: 104px;
+  }
+
+  .app-header {
+    padding: var(--esp-2) var(--esp-4);
+  }
+
+  .app-header__marca .app-header__orgao {
+    display: none;
+  }
+
+  .app-header__titulo {
+    font-size: var(--tam-md);
+  }
+
+  .app-header__acoes .btn {
+    flex: 1;
+    padding: var(--esp-2);
+    font-size: var(--tam-xs);
+    white-space: normal;
+  }
+
+  /* No celular o botão de tema mostra só o ícone (rótulo continua acessível via title/aria-pressed). */
+  .app-header .app-header__tema {
+    flex: 0 0 auto;
+  }
+
+  .app-header__tema-texto {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .grade-2 {
+    grid-template-columns: 1fr;
+  }
+}

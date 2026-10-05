@@ -1,0 +1,104 @@
+/* ==========================================================================
+   print.css — Impressão de relatórios (carregado com media="print")
+   Oculta toda a interface e imprime somente o relatório gerado.
+   ========================================================================== */
+
+@page {
+  size: A4 landscape;
+  margin: 12mm;
+}
+
+/* Impressão sempre em cores claras, mesmo com o modo escuro ativo. */
+:root[data-tema="escuro"] {
+  --cor-fundo: #ffffff;
+  --cor-superficie: #ffffff;
+  --cor-superficie-alt: #f8fafc;
+  --cor-borda: #d7dde5;
+  --cor-texto: #1d2733;
+  --cor-texto-suave: #5b6878;
+  --cor-primaria: #0b4f8a;
+  --cor-primaria-clara: #e6f0fa;
+  --cor-positivo: #1b7a3d;
+  --cor-negativo: #b42318;
+  color-scheme: light;
+}
+
+.filtro-popover,
+.tabela__filtro {
+  display: none !important;
+}
+
+body {
+  background: #fff;
+  font-size: 10pt;
+  display: block;
+}
+
+.app-header,
+.app-nav,
+.app-footer,
+.pular-conteudo,
+.toasts,
+.modal,
+.pagina__cabecalho,
+.nao-imprimir,
+.alerta,
+.barra-ferramentas {
+  display: none !important;
+}
+
+.app-shell {
+  display: block;
+}
+
+.app-main {
+  padding: 0;
+}
+
+.relatorio {
+  border: 0;
+  padding: 0;
+}
+
+.tabela-wrapper {
+  overflow: visible;
+  border: 0;
+}
+
+.tabela {
+  font-size: 8.5pt;
+}
+
+.tabela thead th {
+  position: static;
+  background: #e6e6e6 !important;
+  color: #000;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.tabela__celula {
+  padding: 3px 5px;
+  border-bottom: 1px solid #bbb;
+}
+
+.tabela tr {
+  break-inside: avoid;
+}
+
+.relatorio__secao {
+  break-inside: auto;
+}
+
+.relatorio__subtitulo {
+  break-after: avoid;
+}
+
+.relatorio__assinaturas {
+  break-inside: avoid;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}

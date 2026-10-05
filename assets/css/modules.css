@@ -1,0 +1,259 @@
+/* ==========================================================================
+   modules.css — Estilos específicos dos módulos (Painel, Secretaria,
+   Importação, Consulta, Relatórios)
+   ========================================================================== */
+
+/* ---------- Painel: gráfico de barras divergentes ---------- */
+.grafico {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-2);
+}
+
+.grafico__item {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.2fr) 2fr minmax(110px, auto);
+  align-items: center;
+  gap: var(--esp-3);
+  font-size: var(--tam-xs);
+}
+
+.grafico__rotulo {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--cor-texto);
+  text-decoration: none;
+}
+
+.grafico__rotulo:hover {
+  text-decoration: underline;
+}
+
+.grafico__trilho {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 14px;
+  background: var(--cor-superficie-alt);
+  border-radius: var(--raio-pequeno);
+}
+
+.grafico__metade {
+  display: flex;
+  height: 100%;
+}
+
+.grafico__metade--neg {
+  justify-content: flex-end;
+  border-right: 1px solid var(--cor-texto-suave);
+}
+
+.grafico__barra {
+  display: block;
+  width: var(--largura, 0%);
+  height: 100%;
+}
+
+.grafico__barra--negativo {
+  background: var(--cor-negativo);
+  border-radius: var(--raio-pequeno) 0 0 var(--raio-pequeno);
+}
+
+.grafico__barra--positivo,
+.grafico__barra--neutro {
+  background: var(--cor-positivo);
+  border-radius: 0 var(--raio-pequeno) var(--raio-pequeno) 0;
+}
+
+.grafico__valor {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.grafico__valor--negativo { color: var(--cor-negativo); }
+.grafico__valor--positivo { color: var(--cor-positivo); }
+
+/* ---------- Secretaria ---------- */
+.secretaria__ferramentas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--esp-4);
+  padding: var(--esp-4);
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+}
+
+.secretaria__dinamica {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-5);
+}
+
+/* ---------- Importação ---------- */
+.importacao__area-previa:empty {
+  display: none;
+}
+
+.importacao__previa {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-3);
+}
+
+.importacao__subtitulo {
+  font-size: var(--tam-md);
+}
+
+.importacao__alertas summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: var(--esp-2);
+}
+
+/* ---------- Consulta de demanda ---------- */
+.consulta__resultado {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--esp-3);
+}
+
+.consulta__resultado > .alerta,
+.consulta__resultado > .tabela-wrapper {
+  align-self: stretch;
+}
+
+.consulta__texto {
+  align-self: stretch;
+  padding: var(--esp-3) var(--esp-4);
+  border-left: 4px solid var(--cor-primaria);
+  background: var(--cor-superficie-alt);
+  font-style: italic;
+}
+
+/* ---------- Atualização Fiorilli ---------- */
+.fiorilli__resultado {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-3);
+}
+
+.fiorilli__opcoes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-1);
+  padding: var(--esp-3);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-pequeno);
+}
+
+.fiorilli__detalhe {
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-pequeno);
+  padding: var(--esp-2) var(--esp-3);
+}
+
+.fiorilli__resumo-detalhe {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.fiorilli__detalhe[open] > .fiorilli__resumo-detalhe {
+  margin-bottom: var(--esp-2);
+}
+
+/* ---------- Relatórios ---------- */
+.relatorio {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-5);
+  padding: var(--esp-6);
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+}
+
+.relatorio__cabecalho {
+  text-align: center;
+  padding-bottom: var(--esp-4);
+  border-bottom: 2px solid var(--cor-primaria);
+}
+
+.relatorio__orgao {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.relatorio__sistema {
+  color: var(--cor-texto-suave);
+  font-size: var(--tam-sm);
+}
+
+.relatorio__titulo {
+  margin-top: var(--esp-2);
+  font-size: var(--tam-xl);
+}
+
+.relatorio__meta {
+  margin-top: var(--esp-1);
+  font-size: var(--tam-xs);
+  color: var(--cor-texto-suave);
+}
+
+.relatorio__secao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-2);
+}
+
+.relatorio__subtitulo {
+  font-size: var(--tam-md);
+  color: var(--cor-primaria);
+}
+
+.relatorio__resumo {
+  font-size: var(--tam-sm);
+  font-weight: 600;
+  text-align: right;
+}
+
+.relatorio__assinaturas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--esp-6);
+  margin-top: var(--esp-6);
+}
+
+.relatorio__assinatura {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--esp-1);
+  font-size: var(--tam-sm);
+}
+
+.relatorio__linha-assinatura {
+  width: 100%;
+  border-top: 1px solid var(--cor-texto);
+}
+
+@media (max-width: 600px) {
+  .grafico__item {
+    grid-template-columns: 1fr;
+    gap: var(--esp-1);
+  }
+
+  .grafico__valor {
+    text-align: left;
+  }
+
+  .relatorio {
+    padding: var(--esp-4);
+  }
+}
