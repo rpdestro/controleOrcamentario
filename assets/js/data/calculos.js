@@ -4,7 +4,7 @@
  *
  * Fórmula do resultado (idêntica à aba GERAL da planilha):
  *   RESULTADO = Reserva + Saldo Ficha − Essencial − Folha
- * "Cortes" é informativo e NÃO entra no resultado (assim como na planilha).
+ * A coluna "Cortes" da planilha é ignorada (não é lida, somada nem exportada).
  */
 (function (App) {
   'use strict';
@@ -13,11 +13,11 @@
   const { TOLERANCIA_CONFERENCIA } = App.core.config;
   const periodo = App.utils.periodo;
 
-  const CAMPOS_SOMA = Object.freeze(['essencial', 'antes', 'cortes', 'reserva', 'saldoFicha']);
+  const CAMPOS_SOMA = Object.freeze(['essencial', 'antes', 'reserva', 'saldoFicha']);
 
   /** Soma os campos numéricos de um conjunto de linhas. */
   function somarLinhas(linhas) {
-    const soma = { essencial: 0, antes: 0, cortes: 0, reserva: 0, saldoFicha: 0 };
+    const soma = { essencial: 0, antes: 0, reserva: 0, saldoFicha: 0 };
     linhas.forEach((linha) => CAMPOS_SOMA.forEach((c) => { soma[c] += Number(linha[c]) || 0; }));
     CAMPOS_SOMA.forEach((c) => { soma[c] = arredondar(soma[c]); });
     return soma;
@@ -76,7 +76,7 @@
       ...totaisSecretaria(s, filtro)
     }));
 
-    const geral = { essencial: 0, antes: 0, cortes: 0, reserva: 0, saldoFicha: 0, folha: 0, resultado: 0, qtdLinhas: 0, qtdFichas: 0 };
+    const geral = { essencial: 0, antes: 0, reserva: 0, saldoFicha: 0, folha: 0, resultado: 0, qtdLinhas: 0, qtdFichas: 0 };
     porSecretaria.forEach((t) => Object.keys(geral).forEach((c) => { geral[c] += t[c]; }));
     Object.keys(geral).forEach((c) => { geral[c] = arredondar(geral[c]); });
 

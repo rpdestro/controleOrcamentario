@@ -8,7 +8,7 @@
  *     Estrutura de cada aba:
  *        A1 = nome | A2 = "Atualizado em dd/mm/aaaa" | linha de cabeçalho
  *        (Ficha, U.E, FR, N. Despesa, Descrição, Observação, Essencial,
- *        Antes, Cortes, Reserva, Saldo ficha) | linhas de dados | linha de
+ *        Antes, [Cortes — ignorada], Reserva, Saldo ficha) | linhas de dados | linha de
  *        SUBTOTAL | bloco-resumo (Essencial, Reserva, Saldo ficha, Folha, TOTAL)
  *        | lançamentos abaixo do TOTAL ("fora do quadro", não somados).
  *  2. "Tabela plana" (CSV/XLSX exportado pela aplicação): uma linha por
@@ -31,6 +31,7 @@
    */
   const RECONHECEDORES = Object.freeze([
     ['saldoFicha', /^saldo/],
+    // "Cortes" é reconhecida apenas para ser IGNORADA (não é campo do modelo).
     ['cortes', /^cortes?\b/],
     ['codigoSecretaria', /^(u\.?\s?o\.?|cod(igo)?\.?\s(da\s)?secretaria)$/],
     ['nomeSecretaria', /^(local|secretaria|nome\s(da\s)?secretaria)$/],
@@ -172,7 +173,7 @@
       if (semIdentificacao) {
         // Linha de SUBTOTAL (logo após os dados): guarda para conferência.
         if (secao === 'dados' && 'essencial' in colunas && !vazio(linha[colunas.essencial])) {
-          ['essencial', 'cortes', 'reserva', 'saldoFicha'].forEach((campo) => {
+          ['essencial', 'reserva', 'saldoFicha'].forEach((campo) => {
             if (campo in colunas) resultado.referencia[campo] = Math.abs(paraNumero(linha[colunas[campo]]) || 0);
           });
           secao = 'resumo';
@@ -263,7 +264,7 @@
         if (c === '"' && conteudo[i + 1] === '"') { campo += '"'; i += 1; }
         else if (c === '"') entreAspas = false;
         else campo += c;
-      } else if (c === '"') entreAspas = true;
+      } else if (c === '"' && campo === '') entreAspas = true; // aspas no meio do campo (ex.: USO "MARCIO) são texto
       else if (c === separador) { linha.push(campo); campo = ''; }
       else if (c === '\n' || c === '\r') {
         if (c === '\r' && conteudo[i + 1] === '\n') i += 1;

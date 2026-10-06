@@ -5,16 +5,17 @@
  * Secretaria {
  *   codigo: '02.01', nome: string, folha: number (valor positivo),
  *   atualizadoEm: string, linhas: Linha[], pendentes: Linha[],
- *   referencia: { essencial, cortes, reserva, saldoFicha, total, folhaGeral } | null
+ *   referencia: { essencial, reserva, saldoFicha, total, folhaGeral } | null
  * }
  *
  * Linha { id, ficha, ue, fonte, despesa, descricao, observacao,
  *         periodoInicio ('AAAA-MM'), periodoFim ('AAAA-MM'), anotacao,
- *         essencial, antes, cortes, reserva, saldoFicha }
+ *         essencial, antes, reserva, saldoFicha }
+ * (A coluna "Cortes" da planilha é ignorada.)
  *
  * Regras de negócio:
  *  - Uma mesma FICHA pode ocupar várias linhas (itens do Essencial).
- *    Cortes/Reserva/Saldo ficha ficam somente na primeira linha da ficha;
+ *    Reserva/Saldo ficha ficam somente na primeira linha da ficha;
  *    as demais ficam em 0. Assim, os totais são somas simples (= SUBTOTAL do Excel).
  *  - "observacao" guarda o rótulo canônico do período (ex.: "Out/2026 a Dez/2026").
  *    Textos antigos são convertidos; os não reconhecidos ficam como estão

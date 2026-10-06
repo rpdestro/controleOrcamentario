@@ -57,7 +57,7 @@
 
     aoa.push([]);
     const linhaSubtotal = aoa.length + 1;
-    aoa.push(['', '', '', '', '', '', -t.essencial, t.antes, t.cortes, t.reserva, t.saldoFicha]);
+    aoa.push(['', '', '', '', '', '', -t.essencial, t.antes, t.reserva, t.saldoFicha]);
     aoa.push([]);
     const linhaResumo = aoa.length + 1;
     aoa.push(['', '', '', '', '', 'Essencial', -t.essencial]);
@@ -77,14 +77,15 @@
     // Fórmulas equivalentes às da planilha original (valores já calculados acima).
     const formulas = {};
     if (secretaria.linhas.length) {
-      ['G', 'H', 'I', 'J', 'K'].forEach((col) => {
+      // G=Essencial, H=Antes, I=Reserva, J=Saldo ficha
+      ['G', 'H', 'I', 'J'].forEach((col) => {
         const sinal = col === 'G' ? '*-1' : '';
         formulas[`${col}${linhaSubtotal}`] = `SUBTOTAL(9,${col}${inicioDados}:${col}${fimDados})${sinal}`;
       });
     }
     formulas[`G${linhaResumo}`] = `G${linhaSubtotal}`;
-    formulas[`G${linhaResumo + 1}`] = `J${linhaSubtotal}`;
-    formulas[`G${linhaResumo + 2}`] = `K${linhaSubtotal}`;
+    formulas[`G${linhaResumo + 1}`] = `I${linhaSubtotal}`;
+    formulas[`G${linhaResumo + 2}`] = `J${linhaSubtotal}`;
     formulas[`G${linhaTotal}`] = `SUM(G${linhaResumo}:G${linhaFolha})`;
 
     return { aoa, formulas, linhaSubtotal, linhaFolha, linhaTotal };
@@ -97,31 +98,30 @@
       [config.ORGAO],
       [`${config.APP_NOME} — Consolidado`],
       [],
-      ['U.O.', 'LOCAL', 'ESSENCIAL', 'Cortes despesa', 'FOLHA', 'RESERVA', 'SALDO FICHA', 'TOTAL']
+      ['U.O.', 'LOCAL', 'ESSENCIAL', 'FOLHA', 'RESERVA', 'SALDO FICHA', 'TOTAL']
     ];
     const formulas = {};
     const inicio = aoa.length + 1;
 
     porSecretaria.forEach((t) => {
       const r = aoa.length + 1;
-      aoa.push([t.codigo, t.nome, -t.essencial, t.cortes, -t.folha, t.reserva, t.saldoFicha, t.resultado]);
+      aoa.push([t.codigo, t.nome, -t.essencial, -t.folha, t.reserva, t.saldoFicha, t.resultado]);
       const p = posicoes[t.codigo];
       const aba = `'${t.codigo}'`;
       if (p) {
         formulas[`C${r}`] = `${aba}!G${p.linhaSubtotal}`;
-        formulas[`D${r}`] = `${aba}!I${p.linhaSubtotal}`;
-        formulas[`E${r}`] = `${aba}!G${p.linhaFolha}`;
+        formulas[`D${r}`] = `${aba}!G${p.linhaFolha}`;
+        formulas[`E${r}`] = `${aba}!I${p.linhaSubtotal}`;
         formulas[`F${r}`] = `${aba}!J${p.linhaSubtotal}`;
-        formulas[`G${r}`] = `${aba}!K${p.linhaSubtotal}`;
       }
-      formulas[`H${r}`] = `C${r}+F${r}+G${r}+E${r}`;
+      formulas[`G${r}`] = `C${r}+E${r}+F${r}+D${r}`;
     });
 
     const fim = aoa.length;
     const rTotal = aoa.length + 2;
-    aoa.push([], ['', `Atualizado em ${atualizadoEm}`, -geral.essencial, geral.cortes, -geral.folha, geral.reserva, geral.saldoFicha, geral.resultado]);
+    aoa.push([], ['', `Atualizado em ${atualizadoEm}`, -geral.essencial, -geral.folha, geral.reserva, geral.saldoFicha, geral.resultado]);
     if (porSecretaria.length) {
-      ['C', 'D', 'E', 'F', 'G', 'H'].forEach((col) => { formulas[`${col}${rTotal}`] = `SUM(${col}${inicio}:${col}${fim})`; });
+      ['C', 'D', 'E', 'F', 'G'].forEach((col) => { formulas[`${col}${rTotal}`] = `SUM(${col}${inicio}:${col}${fim})`; });
     }
 
     aoa.push([], [], ['Textos-padrão de despacho:']);
@@ -144,9 +144,9 @@
   /** Quadro consolidado (uma linha por secretaria). */
   function montarConsolidado(secretarias, filtro = {}) {
     const { geral, porSecretaria } = totaisGerais(secretarias, filtro);
-    const aoa = [['U.O.', 'Secretaria', 'Essencial', 'Cortes', 'Folha', 'Reserva', 'Saldo Ficha', 'Resultado']];
-    porSecretaria.forEach((t) => aoa.push([t.codigo, t.nome, t.essencial, t.cortes, t.folha, t.reserva, t.saldoFicha, t.resultado]));
-    aoa.push(['', 'TOTAL GERAL', geral.essencial, geral.cortes, geral.folha, geral.reserva, geral.saldoFicha, geral.resultado]);
+    const aoa = [['U.O.', 'Secretaria', 'Essencial', 'Folha', 'Reserva', 'Saldo Ficha', 'Resultado']];
+    porSecretaria.forEach((t) => aoa.push([t.codigo, t.nome, t.essencial, t.folha, t.reserva, t.saldoFicha, t.resultado]));
+    aoa.push(['', 'TOTAL GERAL', geral.essencial, geral.folha, geral.reserva, geral.saldoFicha, geral.resultado]);
     return aoa;
   }
 
@@ -175,7 +175,7 @@
     return aba;
   }
 
-  const LARGURAS_ABA = [8, 9, 5, 12, 50, 22, 15, 15, 15, 15, 15, 45];
+  const LARGURAS_ABA = [8, 9, 5, 12, 50, 22, 15, 15, 15, 15, 45];
 
   /** Workbook completo no layout original (GERAL + abas por secretaria). */
   function montarWorkbookBase(XLSX, secretarias, atualizadoEm) {
@@ -187,7 +187,7 @@
       return [s.codigo, criarAba(XLSX, montada.aoa, montada.formulas, LARGURAS_ABA)];
     });
     const geral = montarAbaGeral(secretarias, posicoes, atualizadoEm);
-    XLSX.utils.book_append_sheet(wb, criarAba(XLSX, geral.aoa, geral.formulas, [8, 55, 16, 16, 16, 16, 16, 16]), 'GERAL');
+    XLSX.utils.book_append_sheet(wb, criarAba(XLSX, geral.aoa, geral.formulas, [8, 55, 16, 16, 16, 16, 16]), 'GERAL');
     abas.forEach(([nome, aba]) => XLSX.utils.book_append_sheet(wb, aba, nome));
     return wb;
   }
@@ -229,7 +229,7 @@
     let wb;
     if (escopo === 'consolidado') {
       wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, criarAba(XLSX, montarConsolidado(alvo, filtro), {}, [8, 55, 16, 16, 16, 16, 16, 16]), 'Consolidado');
+      XLSX.utils.book_append_sheet(wb, criarAba(XLSX, montarConsolidado(alvo, filtro), {}, [8, 55, 16, 16, 16, 16, 16]), 'Consolidado');
     } else {
       wb = montarWorkbookBase(XLSX, alvo.map((s) => aplicarFiltro(s, filtro)), data);
     }

@@ -188,6 +188,21 @@
     });
     it('exemplo da 1ª nota para conferir as colunas', () => expect(lido.exemplo.processo).toBe('001.005'));
 
+    it('reconhece o layout CSV do Fiorilli pelos títulos', () => {
+      const csv = App.data.importer.parseCsv(
+        '﻿LOGIN_AN;FICHA;CFPRO;CATEC;SALDO;FONGRUPO;PROCESSO;CODLO;SALDO_RESERVA\n' +
+        ';25;04.122;3.3.90.30.00;20000;01;001.003;020101;1000,5\n' +
+        ';25;04.122;3.3.90.30.00;20000;01;001.005;020101;300\n'
+      );
+      const detectadas = fio.detectarColunas(csv);
+      expect(detectadas).toEqual({ ficha: 'B', ue: 'H', fonte: 'F', despesa: 'D', processo: 'G', reserva: 'I', saldoFicha: 'E' });
+      expect(fio.lerRegistros(csv, COLUNAS, FILTRO).registros.length).toBe(0);
+      const [r] = fio.lerRegistros(csv, detectadas, FILTRO).registros;
+      expect(r.reserva).toBe(1000.5);
+      expect(r.saldoFicha).toBe(20000);
+      expect(fio.detectarColunas(RELATORIO)).toBe(null);
+    });
+
     it('planeja atualizações, inclusões, ignoradas e reserva por secretaria', () => {
       const plano = fio.planejar(base(), lido.registros, { incluirPessoal: false, incluirZeradas: false });
       const campos = (f) => plano.atualizacoes.find((a) => a.ficha === f).alteracoes.map((a) => a.campo);

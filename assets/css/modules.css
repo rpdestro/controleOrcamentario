@@ -178,10 +178,52 @@
   border-radius: var(--raio);
 }
 
+/* Cada página do relatório (na impressão, a página 2 começa em nova folha). */
+.relatorio__pagina {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-4);
+}
+
+.relatorio__pagina + .relatorio__pagina {
+  padding-top: var(--esp-6);
+  border-top: 1px dashed var(--cor-borda);
+}
+
 .relatorio__cabecalho {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--esp-4);
   padding-bottom: var(--esp-4);
   border-bottom: 2px solid var(--cor-primaria);
+}
+
+.relatorio__identificacao {
+  text-align: center;
+}
+
+.relatorio__logo {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 61px;
+  object-fit: contain;
+}
+
+.relatorio__legenda {
+  font-size: var(--tam-sm);
+  color: var(--cor-texto-suave);
+}
+
+.relatorio__numero-pagina {
+  font-size: var(--tam-xs);
+  color: var(--cor-texto-suave);
+  text-align: right;
+}
+
+/* Gráfico no relatório: nome completo da secretaria, coluna de rótulo mais larga. */
+.grafico--completo .grafico__item {
+  grid-template-columns: minmax(200px, 2fr) 3fr minmax(120px, auto);
 }
 
 .relatorio__orgao {
@@ -221,26 +263,6 @@
   font-size: var(--tam-sm);
   font-weight: 600;
   text-align: right;
-}
-
-.relatorio__assinaturas {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--esp-6);
-  margin-top: var(--esp-6);
-}
-
-.relatorio__assinatura {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--esp-1);
-  font-size: var(--tam-sm);
-}
-
-.relatorio__linha-assinatura {
-  width: 100%;
-  border-top: 1px solid var(--cor-texto);
 }
 
 @media (max-width: 600px) {

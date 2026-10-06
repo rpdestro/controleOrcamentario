@@ -6,7 +6,7 @@
  *     Reserva por secretaria (antes x depois), alterações campo a campo,
  *     fichas novas (com regras de inclusão ajustáveis) e fichas ausentes;
  *  3) cópia de segurança opcional + aplicação.
- * Descrição, Essencial, Período, Antes, Cortes e Folha NUNCA são alterados.
+ * Descrição, Essencial, Período, Antes e Folha NUNCA são alterados.
  */
 (function (App) {
   'use strict';
@@ -202,7 +202,7 @@
   function abrir() {
     const colunas = store.getColunasFiorilli();
     const filtro = store.getFiltroReservas();
-    const contexto = { registros: [], alertas: [], cabecalho: {}, exemplo: {}, resumo: null, meta: null, opcoes: null, plano: null };
+    const contexto = { colunas, colunasDetectadas: false, registros: [], alertas: [], cabecalho: {}, exemplo: {}, resumo: null, meta: null, opcoes: null, plano: null };
     const descreverColunas = fiorilli.CAMPOS_OFICIAIS.filter((c) => colunas[c]).map((c) => `${fiorilli.ROTULOS[c]}=${colunas[c]}`).join(', ');
 
     const areaPrevia = criar('div', { classe: 'importacao__area-previa', attrs: { 'aria-live': 'polite' } });
@@ -254,7 +254,11 @@
           testid: 'fiorilli-previa',
           filhos: [
             criar('h3', { classe: 'importacao__subtitulo', texto: 'Pré-visualização' }),
-            conferenciaColunas(colunas, contexto.cabecalho, contexto.exemplo),
+            contexto.colunasDetectadas ? alerta({
+              nivel: 'info',
+              mensagem: 'Layout CSV do Fiorilli reconhecido pelos títulos das colunas (FICHA, CODLO, FONGRUPO, CATEC, PROCESSO, SALDO_RESERVA, SALDO). O mapeamento de Configurações não foi alterado.'
+            }) : null,
+            conferenciaColunas(contexto.colunas, contexto.cabecalho, contexto.exemplo),
             blocoFiltro(contexto.filtro, contexto.resumo),
             formularioOpcoes(contexto.opcoes, (novas) => { contexto.opcoes = novas; recalcular(); }),
             regiaoResultado,
@@ -266,7 +270,7 @@
                 criar('ul', { classe: 'lista-alertas', filhos: contexto.alertas.map((a) => criar('li', { classe: `lista-alertas__item lista-alertas__item--${a.nivel}`, texto: a.mensagem })) })
               ]
             }) : null,
-            alerta({ nivel: 'info', mensagem: `Descrição, Essencial, Período, Antes, Cortes e Folha não são alterados.${colunas.saldoFicha ? '' : ' Saldo Ficha também é mantido (coluna não configurada).'} Fichas novas entram com Descrição e Essencial em branco.` }),
+            alerta({ nivel: 'info', mensagem: `Descrição, Essencial, Período, Antes e Folha não são alterados.${contexto.colunas.saldoFicha ? '' : ' Saldo Ficha também é mantido (coluna não configurada).'} Fichas novas entram com Descrição e Essencial em branco.` }),
             criar('label', { classe: 'form__radio', filhos: [backup, criar('span', { texto: 'Baixar cópia de segurança (XLSX) da base atual antes de aplicar' })] })
           ]
         })
@@ -282,11 +286,21 @@
 
       areaPrevia.append(criar('p', { classe: 'carregando', texto: 'Lendo arquivo do Fiorilli…', attrs: { role: 'status' } }));
       try {
-        const lido = fiorilli.lerRegistros(await lerMatriz(arquivo), colunas, filtro);
+        const matriz = await lerMatriz(arquivo);
+        let colunasUsadas = colunas;
+        let lido = fiorilli.lerRegistros(matriz, colunas, filtro);
+        // O CSV do Fiorilli tem outro layout: sem fichas nas letras configuradas, tenta pelos títulos.
+        const detectadas = lido.registros.length ? null : fiorilli.detectarColunas(matriz);
+        if (detectadas) {
+          colunasUsadas = detectadas;
+          lido = fiorilli.lerRegistros(matriz, detectadas, filtro);
+        }
         if (!lido.registros.length) {
           throw new Error(`Nenhuma ficha encontrada na coluna ${colunas.ficha}. Verifique o arquivo ou o mapeamento de colunas em Configurações.`);
         }
         Object.assign(contexto, lido, {
+          colunas: colunasUsadas,
+          colunasDetectadas: Boolean(detectadas),
           meta: {
             arquivo: arquivo.name,
             dataSaldos: fiorilli.extrairDataArquivo(arquivo.name) || dataBR(arquivo.lastModified),

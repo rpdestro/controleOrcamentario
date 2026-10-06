@@ -8,7 +8,7 @@
  *   Ficha (R) · U.E (W) · Despesa (Y) · Fonte (BD) · Processo (AS)
  *   Saldo da Reserva (BL) · Saldo da ficha (BM, opcional — valor da última nota)
  * Campos do USUÁRIO (nunca alterados pela integração):
- *   Descrição · Essencial · Observação (Período) · Antes · Cortes · Folha
+ *   Descrição · Essencial · Observação (Período) · Antes · Folha
  *
  * Regra da Reserva: soma do "Saldo da Reserva" das notas da ficha que atendem
  * ao FILTRO configurável (processos 001.003 / 001.003.1 / 001.003.3 e Fonte 1).
@@ -45,6 +45,41 @@
     const t = String(letra || '').trim().toUpperCase();
     if (!/^[A-Z]{1,3}$/.test(t)) return -1;
     return [...t].reduce((total, c) => total * 26 + (c.charCodeAt(0) - 64), 0) - 1;
+  }
+
+  /** 0 -> "A", 27 -> "AB". */
+  function indiceParaLetra(indice) {
+    let letra = '';
+    for (let n = indice + 1; n > 0; n = Math.floor((n - 1) / 26)) letra = String.fromCharCode(65 + ((n - 1) % 26)) + letra;
+    return letra;
+  }
+
+  /**
+   * Títulos das colunas no CSV de Notas de Reserva do Fiorilli (download-dd-mm-aaaa.csv),
+   * cujo layout difere do XLS. Conferido no arquivo de 06/10/2026.
+   */
+  const CABECALHOS_CSV = Object.freeze({
+    ficha: 'FICHA', ue: 'CODLO', fonte: 'FONGRUPO', despesa: 'CATEC',
+    processo: 'PROCESSO', reserva: 'SALDO_RESERVA', saldoFicha: 'SALDO'
+  });
+
+  /**
+   * Procura, nas primeiras linhas, um cabeçalho com os títulos do CSV do Fiorilli.
+   * @returns {Object|null} mapeamento de colunas (letras) ou null se não reconhecido
+   */
+  function detectarColunas(aoa) {
+    for (const linha of aoa.slice(0, 10)) {
+      if (!Array.isArray(linha)) continue;
+      const titulos = linha.map((v) => texto(v).toUpperCase());
+      const colunas = {};
+      CAMPOS_OFICIAIS.forEach((campo) => {
+        const i = titulos.indexOf(CABECALHOS_CSV[campo]);
+        colunas[campo] = i < 0 ? '' : indiceParaLetra(i);
+      });
+      const completo = CAMPOS_OFICIAIS.every((c) => colunas[c] || CAMPOS_OPCIONAIS.includes(c));
+      if (completo) return colunas;
+    }
+    return null;
   }
 
   /** Valida o mapeamento de colunas (letras válidas, obrigatórias preenchidas e sem repetição). */
@@ -331,7 +366,7 @@
 
   App.data.fiorilli = Object.freeze({
     CAMPOS_OFICIAIS, CAMPOS_OPCIONAIS, ROTULOS, PROCESSO_VAZIO,
-    letraParaIndice, validarColunas, normalizarFiltro, validarFiltro, atendeFiltro, listaDeTexto,
+    letraParaIndice, indiceParaLetra, detectarColunas, validarColunas, normalizarFiltro, validarFiltro, atendeFiltro, listaDeTexto,
     extrairDataArquivo, codigoPorUe, lerRegistros, planejar, aplicar
   });
 })(window.OrcApp);

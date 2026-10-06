@@ -54,10 +54,17 @@
       expect(r.referencia.essencial).toBe(16000);
       expect(r.referencia.saldoFicha).toBe(49000);
     });
-    it('gera alerta para valor inválido e considera 0', () => {
+    it('ignora a coluna "Cortes" (mesmo com valor inválido)', () => {
       const r = lerFixture();
+      expect(r.alertas.length).toBe(0);
+      expect('cortes' in r.linhas[2]).toBe(false);
+      expect(r.linhas[2].reserva).toBe(500);
+    });
+    it('gera alerta para valor inválido e considera 0', () => {
+      const aba = FIXTURE_ABA.map((linha, i) => (i === 6 ? [...linha.slice(0, 7), '300,69,', ...linha.slice(8)] : linha)); // valor inválido em "Antes"
+      const r = imp.lerAbaSecretaria(aba, '02.07');
       expect(r.alertas.length).toBe(1);
-      expect(r.linhas[2].cortes).toBe(0);
+      expect(r.linhas[2].antes).toBe(0);
     });
     it('tolera título "Ficha" digitado errado (caso real da aba 02.35)', () => {
       const aba = FIXTURE_ABA.map((linha, i) => (i === 2 ? [202, ...linha.slice(1)] : linha));
@@ -88,6 +95,10 @@
       expect(m).toEqual([['a', 'b'], ['x;1', 'di"z']]);
     });
     it('detecta vírgula', () => expect(imp.parseCsv('a,b\n1,2')).toEqual([['a', 'b'], ['1', '2']]));
+    it('aspas no meio do campo são texto (não engolem as linhas seguintes)', () => {
+      const m = imp.parseCsv('a;b\nCEI - USO "MARCIO;1\nx;2\n');
+      expect(m).toEqual([['a', 'b'], ['CEI - USO "MARCIO', '1'], ['x', '2']]);
+    });
   });
 
   const REF = { ano: 2026, mes: 10 }; // base "Atualizado em 01/10/2026"

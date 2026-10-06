@@ -32,6 +32,43 @@
   const varianteSinal = (valor) => (valor < 0 ? 'negativo' : valor > 0 ? 'positivo' : 'neutro');
 
   /**
+   * Gráfico "Resultado por secretaria" (barras divergentes em CSS):
+   * negativo à esquerda, positivo à direita. Usado no Painel e no relatório.
+   * @param {Array} porSecretaria totais por secretaria ({codigo, nome, resultado})
+   * @param {boolean} [nomeCompleto] exibe o nome inteiro (relatório impresso)
+   */
+  function graficoResultado(porSecretaria, { testid = 'grafico-resultado', nomeCompleto = false } = {}) {
+    const { nomeCurto } = App.utils.format;
+    const maximo = Math.max(1, ...porSecretaria.map((t) => Math.abs(t.resultado)));
+    const ordenado = [...porSecretaria].sort((a, b) => a.resultado - b.resultado);
+    return criar('ul', {
+      classe: `grafico${nomeCompleto ? ' grafico--completo' : ''}`,
+      testid,
+      attrs: { 'aria-label': 'Resultado por secretaria' },
+      filhos: ordenado.map((t) => {
+        const variante = varianteSinal(t.resultado);
+        const barra = criar('span', { classe: `grafico__barra grafico__barra--${variante}` });
+        barra.style.setProperty('--largura', `${(Math.abs(t.resultado) / maximo) * 100}%`);
+        return criar('li', {
+          classe: 'grafico__item',
+          testid: `grafico-item-${t.codigo}`,
+          filhos: [
+            criar('a', { classe: 'grafico__rotulo', texto: `${t.codigo} ${nomeCompleto ? t.nome : nomeCurto(t.nome)}`, attrs: { href: `#/secretaria/${t.codigo}`, title: t.nome } }),
+            criar('span', {
+              classe: 'grafico__trilho',
+              filhos: [
+                criar('span', { classe: 'grafico__metade grafico__metade--neg', filhos: [t.resultado < 0 ? barra : null] }),
+                criar('span', { classe: 'grafico__metade grafico__metade--pos', filhos: [t.resultado >= 0 ? barra : null] })
+              ]
+            }),
+            criar('span', { classe: `grafico__valor grafico__valor--${variante}`, texto: moeda(t.resultado) })
+          ]
+        });
+      })
+    });
+  }
+
+  /**
    * Campo de formulário com rótulo, dica e mensagem de erro acessível.
    * @returns {HTMLElement} wrapper .form__campo (input acessível via querySelector)
    */
@@ -234,6 +271,6 @@
   }
 
   App.ui.componentes = Object.freeze({
-    botao, kpi, varianteSinal, campo, aplicarErros, resumoErros, alerta, tabela, estadoVazio, cabecalhoPagina
+    botao, kpi, varianteSinal, graficoResultado, campo, aplicarErros, resumoErros, alerta, tabela, estadoVazio, cabecalhoPagina
   });
 })(window.OrcApp);

@@ -49,7 +49,6 @@
         kpi({ rotulo: 'Reserva', valor: moeda(t.reserva), variante: 'positivo', testid: 'kpi-sec-reserva' }),
         kpi({ rotulo: 'Saldo Ficha', valor: moeda(t.saldoFicha), variante: 'positivo', testid: 'kpi-sec-saldo' }),
         kpi({ rotulo: 'Folha', valor: moeda(t.folha), variante: 'negativo', testid: 'kpi-sec-folha' }),
-        kpi({ rotulo: 'Cortes (informativo)', valor: moeda(t.cortes), testid: 'kpi-sec-cortes' }),
         kpi({ rotulo: 'Resultado', valor: moeda(t.resultado), variante: varianteSinal(t.resultado), testid: 'kpi-sec-resultado', dica: `${t.qtdLinhas} linhas · ${t.qtdFichas} fichas` })
       ]
     });
@@ -145,8 +144,7 @@
           ue: 'Ex.: 020101 · oficial (Fiorilli)', despesa: 'Ex.: 3.3.90.30 · oficial (Fiorilli)',
           ficha: 'Oficial (Fiorilli)', fonte: 'Oficial (Fiorilli)', reserva: 'Oficial (Fiorilli)', saldoFicha: 'Oficial (Fiorilli)',
           essencial: 'Preenchido pelo usuário', descricao: 'Preenchido pelo usuário',
-          anotacao: 'Notas livres (ex.: "PL 16 – transferir para ficha 730", "aguardando ata")',
-          cortes: 'Informativo (não entra no resultado)'
+          anotacao: 'Notas livres (ex.: "PL 16 – transferir para ficha 730", "aguardando ata")'
         }[c.chave],
         attrs: c.tipo === 'moeda' ? { inputmode: 'decimal', placeholder: '0,00', autocomplete: 'off' } : { autocomplete: 'off' }
       })];

@@ -5,7 +5,7 @@
 
 @page {
   size: A4 landscape;
-  margin: 12mm;
+  margin: 10mm;
 }
 
 /* Impressão sempre em cores claras, mesmo com o modo escuro ativo. */
@@ -86,15 +86,66 @@ body {
   break-inside: avoid;
 }
 
-.relatorio__secao {
-  break-inside: auto;
+/* Relatório em exatamente duas folhas: Consolidado Geral + gráfico. */
+.app-main,
+.relatorio {
+  display: block;
 }
 
-.relatorio__subtitulo {
-  break-after: avoid;
+.relatorio__pagina {
+  display: block;
+  break-inside: avoid;
 }
 
-.relatorio__assinaturas {
+.relatorio__pagina > * + * {
+  margin-top: 4mm;
+}
+
+.relatorio__pagina + .relatorio__pagina {
+  break-before: page;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.relatorio__cabecalho {
+  padding-bottom: 2mm;
+}
+
+.relatorio__logo {
+  width: 13mm;
+  height: auto;
+}
+
+.relatorio__orgao,
+.relatorio__sistema,
+.relatorio__meta {
+  font-size: 8pt;
+}
+
+.relatorio__titulo {
+  margin-top: 1mm;
+  font-size: 14pt;
+}
+
+.relatorio__legenda,
+.relatorio__resumo,
+.relatorio__numero-pagina {
+  font-size: 8pt;
+}
+
+/* Barras do gráfico impressas em cores (o navegador omite fundos por padrão). */
+.grafico__trilho,
+.grafico__barra {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.grafico {
+  gap: 1.6mm;
+}
+
+.grafico__item {
+  font-size: 8.5pt;
   break-inside: avoid;
 }
 

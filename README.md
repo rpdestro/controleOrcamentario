@@ -1,4 +1,4 @@
-# Planejamento e Orçamento — Prefeitura Municipal de Botucatu · v1.2
+# Planejamento e Orçamento — Prefeitura Municipal de Botucatu · v1.3
 
 Aplicação web para administrar as **demandas financeiras das Secretarias por período**, usando planilhas Excel como base de dados e o **Sistema Fiorilli** como fonte oficial de saldos.
 
@@ -20,11 +20,11 @@ Aplicação web para administrar as **demandas financeiras das Secretarias por p
 |---|---|
 | **Painel** | Indicadores gerais, situação da última atualização Fiorilli, gráfico de resultado por secretaria, quadro consolidado (igual à aba GERAL, com filtros de coluna) e essencial por período. |
 | **Secretarias** | Uma tela por Unidade Orçamentária: busca, filtro por competência, **filtros de coluna estilo Excel**, inclusão/edição/exclusão de despesas, Folha, consulta de demanda (texto de despacho) e lançamentos "fora do quadro". |
-| **Relatórios** | Consolidado, Detalhado, Resumo por Ficha, e Essencial por Período / por competência de início. Botão **Imprimir / PDF**. |
+| **Relatórios** | Relatório oficial em **duas páginas**, com o brasão da Prefeitura: **Página 1 — Consolidado Geral** e **Página 2 — gráfico "Resultado por secretaria"**. Filtro opcional por competência. Botão **Imprimir / PDF** (A4 paisagem). |
 | **Exportar** | XLSX, XLS ou CSV: base completa, consolidado ou uma secretaria, com filtro de competência. |
 | **Configurações** | Secretarias (incluir, editar, remover), **filtro de reservas** (processos e fontes), **colunas do relatório Fiorilli** e dados locais. |
 
-Os botões **🌙 Modo escuro** e a **versão (v1.2)** ficam no cabeçalho.
+O **brasão da Prefeitura** (`assets/img/brasao.png`), os botões **🌙 Modo escuro** e a **versão (v1.3)** ficam no cabeçalho.
 
 ---
 
@@ -43,7 +43,7 @@ Os botões **🌙 Modo escuro** e a **versão (v1.2)** ficam no cabeçalho.
 | Essencial | Usuário | Nunca alterado pela integração |
 | Observação (Período) | Usuário, **seleção padronizada** | Ver seção 4 |
 | Anotações | Usuário (novo na v1.1) | Notas livres que antes ficavam misturadas na Observação |
-| Antes, Cortes, Folha | Planilha / usuário | Nunca alterados pela integração |
+| Antes, Folha | Planilha / usuário | Nunca alterados pela integração |
 
 As letras das colunas podem ser alteradas em **Configurações → Integração Fiorilli**, caso o layout do arquivo mude. Processo e Saldo Ficha podem ficar em branco (sem Saldo Ficha, o saldo da planilha é mantido). A pré-visualização mostra, para cada campo, o valor encontrado na 1ª nota do arquivo, para você conferir.
 
@@ -52,6 +52,8 @@ As letras das colunas podem ser alteradas em **Configurações → Integração 
 ## 3. Atualização com o Fiorilli (relatório de Notas de Reserva)
 
 Desde a v1.2, o botão **Atualizar Fiorilli** usa o **relatório de Notas de Reserva** (`download-dd-mm-aaaa.xls`) no lugar do antigo `download-SaldoDotacao-*.csv`. O relatório tem **uma linha por nota** (reserva, anulação ou reforço), com várias notas por ficha.
+
+O mesmo relatório exportado em **CSV** (`download-dd-mm-aaaa.csv`) tem outra ordem de colunas. Ele é reconhecido automaticamente pelos títulos: FICHA, CODLO (U.E), FONGRUPO (Fonte), CATEC (Despesa), PROCESSO, SALDO_RESERVA e SALDO (Saldo Ficha). O mapeamento de Configurações continua valendo para o XLS.
 
 **Regra da Reserva (quanto cada secretaria pode gastar):**
 - **Reserva da ficha = soma do "Saldo da Reserva" (coluna BL) das notas que atendem ao filtro.**
@@ -146,7 +148,7 @@ Dica: para preencher as fichas novas vindas do Fiorilli, filtre a coluna **Descr
 ## 6. Regras de negócio
 
 - **Resultado = Reserva + Saldo Ficha − Essencial − Folha**, a mesma fórmula da aba GERAL.
-- "Cortes" é só informativo e não entra no resultado.
+- A coluna "Cortes" da planilha é **ignorada**: não é lida na importação nem aparece no Painel, nos relatórios, nos gráficos ou nas exportações (XLSX, XLS, CSV).
 - Com qualquer filtro ativo, a Folha não é somada, porque é um valor global da secretaria.
 - **Conferência na importação:** o sistema compara os totais calculados com o SUBTOTAL e com a aba GERAL. Na planilha de outubro ele apontou:
   - `GERAL!E18` usa a Folha da 02.09 para o Fundo 02.10, que está com a Folha em branco. A diferença no TOTAL é de R$ 2,5 mi.
@@ -169,7 +171,8 @@ controleOrcamentario/
 │   │   ├── layout.css             cabeçalho, navegação, responsivo
 │   │   ├── components.css         botões, KPIs, tabelas, FILTRO EXCEL, formulários, modal, toast
 │   │   ├── modules.css            gráfico, secretaria, importação, Fiorilli, relatórios
-│   │   └── print.css              impressão (sempre em cores claras)
+│   │   └── print.css              impressão (sempre em cores claras; relatório em 2 folhas)
+│   ├── img/brasao.png             brasão da Prefeitura (cabeçalho e relatórios)
 │   └── js/                        // JAVASCRIPT
 │       ├── core/      namespace.js · config.js (versão, colunas Fiorilli) · events.js
 │       ├── utils/     (funções puras e testadas)
@@ -212,7 +215,7 @@ controleOrcamentario/
 | Modo escuro / versão | `btn-tema` (`aria-pressed`), `app-versao`, `rodape-versao` |
 | Colunas do Fiorilli | `input-fiorilli-coluna-<campo>`, `btn-salvar-colunas-fiorilli` |
 
-- **Testes:** abra `tests/index.html`. São **99 testes**, todos passando. A v1.1 e a v1.2 acrescentam:
+- **Testes:** abra `tests/index.html`. São **101 testes**, todos passando. A v1.1 e a v1.2 acrescentam:
   - padrão de período, com os textos reais da planilha;
   - filtros de coluna;
   - normalizações do Fiorilli;
@@ -249,7 +252,8 @@ Sem a biblioteca, só os arquivos **CSV** funcionam. O relatório de reservas do
 
 | Versão | Data | Mudanças |
 |---|---|---|
-| **v1.2** | 06/10/2026 | **Atualizar Fiorilli** passa a usar o **relatório de Notas de Reserva** (`download-dd-mm-aaaa.xls`). A Reserva vira a soma do Saldo da Reserva das notas filtradas por **processo** (coluna AS: 001.003, 001.003.1, 001.003.3) e **Fonte 1**. Novo **Filtro de reservas** em Configurações, editável pelo usuário. Pré-visualização com **Reserva por secretaria** e saldo por processo. As colunas antigas salvas no navegador são migradas automaticamente. |
+| **v1.3** | 06/10/2026 | A aplicação substitui a planilha do dia a dia ("Planilha Léo Outubro atualizada.xlsx"). **Brasão da Prefeitura** no cabeçalho, no ícone da aba e nos relatórios. **Relatório em duas páginas**: Consolidado Geral + gráfico "Resultado por secretaria" (os demais tipos de relatório e os campos de assinatura foram removidos). Módulo Configurações (colunas do Fiorilli e filtro de reservas) testado com `download-06-10-2026.xls`. |
+| v1.2 | 06/10/2026 | **Atualizar Fiorilli** passa a usar o **relatório de Notas de Reserva** (`download-dd-mm-aaaa.xls`). A Reserva vira a soma do Saldo da Reserva das notas filtradas por **processo** (coluna AS: 001.003, 001.003.1, 001.003.3) e **Fonte 1**. Novo **Filtro de reservas** em Configurações, editável pelo usuário. Pré-visualização com **Reserva por secretaria** e saldo por processo. As colunas antigas salvas no navegador são migradas automaticamente. |
 | v1.1 | 02/10/2026 | Integração **Fiorilli** (CSV oficial, colunas configuráveis, pré-visualização e cópia de segurança). **Padrão de período** (mês inicial/final) com conversão automática dos textos antigos. Novo campo **Anotações**. **Filtros de coluna estilo Excel**. **Modo escuro**. **Número de versão** na interface. |
 | v1.0 | 02/10/2026 | Versão inicial: importação/exportação XLSX/XLS/CSV, Painel, 21 Secretarias, Relatórios, Exportar, Configurações, conferência de totais e consulta de demanda. |
 

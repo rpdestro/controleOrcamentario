@@ -11,8 +11,9 @@
   'use strict';
 
   const { criar } = App.utils.dom;
-  const { moeda, nomeCurto, dataHoraBR } = App.utils.format;
-  const { kpi, varianteSinal, tabela, estadoVazio, cabecalhoPagina, botao, campo, alerta } = App.ui.componentes;
+  const { moeda, dataHoraBR } = App.utils.format;
+  const componentes = App.ui.componentes;
+  const { kpi, varianteSinal, tabela, estadoVazio, cabecalhoPagina, botao, campo, alerta } = componentes;
   const filtroTabela = App.utils.filtroTabela;
   const periodo = App.utils.periodo;
   const calculos = App.data.calculos;
@@ -53,7 +54,6 @@
         kpi({ rotulo: 'Reserva', valor: moeda(geral.reserva), variante: 'positivo', testid: 'kpi-reserva' }),
         kpi({ rotulo: 'Saldo Ficha', valor: moeda(geral.saldoFicha), variante: 'positivo', testid: 'kpi-saldo' }),
         kpi({ rotulo: 'Folha', valor: moeda(geral.folha), variante: 'negativo', testid: 'kpi-folha', dica: filtro.periodo ? 'Não considerada com filtro de período' : null }),
-        kpi({ rotulo: 'Cortes (informativo)', valor: moeda(geral.cortes), testid: 'kpi-cortes' }),
         kpi({ rotulo: 'Resultado', valor: moeda(geral.resultado), variante: varianteSinal(geral.resultado), testid: 'kpi-resultado', dica: 'Reserva + Saldo − Essencial − Folha' })
       ]
     });
@@ -61,40 +61,13 @@
 
   /** Gráfico de barras divergentes: negativo à esquerda, positivo à direita. */
   function graficoResultado(porSecretaria) {
-    const maximo = Math.max(1, ...porSecretaria.map((t) => Math.abs(t.resultado)));
-    const ordenado = [...porSecretaria].sort((a, b) => a.resultado - b.resultado);
-
     return criar('section', {
       classe: 'cartao',
       testid: 'painel-grafico',
       filhos: [
         criar('h2', { classe: 'cartao__titulo', texto: 'Resultado por secretaria' }),
         criar('p', { classe: 'cartao__descricao', texto: 'Barras à esquerda indicam déficit; à direita, sobra de recursos.' }),
-        criar('ul', {
-          classe: 'grafico',
-          attrs: { 'aria-label': 'Resultado por secretaria' },
-          filhos: ordenado.map((t) => {
-            const largura = `${(Math.abs(t.resultado) / maximo) * 100}%`;
-            const variante = varianteSinal(t.resultado);
-            const barra = criar('span', { classe: `grafico__barra grafico__barra--${variante}` });
-            barra.style.setProperty('--largura', largura);
-            return criar('li', {
-              classe: 'grafico__item',
-              testid: `grafico-item-${t.codigo}`,
-              filhos: [
-                criar('a', { classe: 'grafico__rotulo', texto: `${t.codigo} ${nomeCurto(t.nome)}`, attrs: { href: `#/secretaria/${t.codigo}`, title: t.nome } }),
-                criar('span', {
-                  classe: 'grafico__trilho',
-                  filhos: [
-                    criar('span', { classe: 'grafico__metade grafico__metade--neg', filhos: [t.resultado < 0 ? barra : null] }),
-                    criar('span', { classe: 'grafico__metade grafico__metade--pos', filhos: [t.resultado >= 0 ? barra : null] })
-                  ]
-                }),
-                criar('span', { classe: `grafico__valor grafico__valor--${variante}`, texto: moeda(t.resultado) })
-              ]
-            });
-          })
-        })
+        componentes.graficoResultado(porSecretaria, { testid: 'painel-grafico-barras' })
       ]
     });
   }
@@ -103,7 +76,6 @@
     { rotulo: 'U.O.', chave: 'codigo', filtravel: true, render: (t) => criar('a', { texto: t.codigo, testid: `link-secretaria-${t.codigo}`, attrs: { href: `#/secretaria/${t.codigo}` } }) },
     { rotulo: 'Secretaria', chave: 'nome', filtravel: true },
     { rotulo: 'Essencial', chave: 'essencial', moeda: true, filtravel: true },
-    { rotulo: 'Cortes', chave: 'cortes', moeda: true, filtravel: true },
     { rotulo: 'Folha', chave: 'folha', moeda: true, filtravel: true },
     { rotulo: 'Reserva', chave: 'reserva', moeda: true, filtravel: true },
     { rotulo: 'Saldo Ficha', chave: 'saldoFicha', moeda: true, filtravel: true },
@@ -132,7 +104,7 @@
             linhasBase: porSecretaria,
             aoAlterar: (novo) => { filtroConsolidado = novo; App.ui.router.renderizar({ manterFoco: true }); }
           },
-          rodape: ['', filtrado ? 'TOTAL (linhas exibidas)' : 'TOTAL GERAL', ...['essencial', 'cortes', 'folha', 'reserva', 'saldoFicha', 'resultado'].map((c) => moeda(soma(c)))]
+          rodape: ['', filtrado ? 'TOTAL (linhas exibidas)' : 'TOTAL GERAL', ...['essencial', 'folha', 'reserva', 'saldoFicha', 'resultado'].map((c) => moeda(soma(c)))]
         })
       ]
     });

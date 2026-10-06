@@ -46,10 +46,10 @@
     { chave: 'observacao',  rotulo: 'Observação (Período)', cabecalhoPlanilha: 'Observação',  tipo: 'texto',  obrigatorio: false },
     { chave: 'essencial',   rotulo: 'Valor Essencial',     cabecalhoPlanilha: 'Essencial',    tipo: 'moeda',  obrigatorio: false },
     { chave: 'antes',       rotulo: 'Valor Anterior',      cabecalhoPlanilha: 'Antes',        tipo: 'moeda',  obrigatorio: false },
-    { chave: 'cortes',      rotulo: 'Cortes',              cabecalhoPlanilha: 'Cortes',       tipo: 'moeda',  obrigatorio: false },
-    { chave: 'reserva',     rotulo: 'Valor Reserva',       cabecalhoPlanilha: 'Reserva',      tipo: 'moeda',  obrigatorio: false },
+    // "Cortes" foi removido (v1.4): a coluna é ignorada na leitura e não é exportada.
+    { chave: 'reserva',    rotulo: 'Valor Reserva',       cabecalhoPlanilha: 'Reserva',      tipo: 'moeda',  obrigatorio: false },
     { chave: 'saldoFicha',  rotulo: 'Saldo Ficha',         cabecalhoPlanilha: 'Saldo ficha',  tipo: 'moeda',  obrigatorio: false },
-    // v1.1: notas livres (antes misturadas na "Observação"). Gravado na coluna L.
+    // v1.1: notas livres (antes misturadas na "Observação"). Gravado na coluna K.
     { chave: 'anotacao',    rotulo: 'Anotações',           cabecalhoPlanilha: 'Anotações',    tipo: 'texto',  obrigatorio: false }
   ].map(Object.freeze));
 
@@ -89,8 +89,9 @@
 
   App.core.config = Object.freeze({
     APP_NOME: 'Planejamento e Orçamento',
-    APP_VERSAO: '1.2.0',
+    APP_VERSAO: '1.3.0',
     ORGAO: 'Prefeitura Municipal de Botucatu',
+    LOGO: 'assets/img/brasao.png',
     STORAGE_KEY: 'orcamento-botucatu:v1',
     TEMA_STORAGE_KEY: 'orcamento-botucatu:tema',
     FIORILLI_COLUNAS_PADRAO,
