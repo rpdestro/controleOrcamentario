@@ -1,4 +1,4 @@
-# Planejamento e Orçamento — Prefeitura Municipal de Botucatu · v1.1
+# Planejamento e Orçamento — Prefeitura Municipal de Botucatu · v1.2
 
 Aplicação web para administrar as **demandas financeiras das Secretarias por período**, usando planilhas Excel como base de dados e o **Sistema Fiorilli** como fonte oficial de saldos.
 
@@ -12,7 +12,7 @@ Aplicação web para administrar as **demandas financeiras das Secretarias por p
 
 1. Abra o `index.html`.
 2. Clique em **Importar planilha** e escolha a planilha de trabalho (ex.: `Planilha Léo Outubro.xlsx`). Confira a pré-visualização e confirme.
-3. Clique em **Atualizar Fiorilli** e escolha o arquivo oficial (ex.: `download-SaldoDotacao-02-10-2026.csv`). Confira o que vai mudar e clique em **Aplicar atualização** (veja a seção 3).
+3. Clique em **Atualizar Fiorilli** e escolha o **relatório de Notas de Reserva** do Fiorilli (ex.: `download-15-09-2026.xls`). Confira o que vai mudar e clique em **Aplicar atualização** (veja a seção 3).
 4. Preencha nas telas das secretarias o que é responsabilidade do usuário: **Descrição**, **Essencial**, **Período** e **Anotações**.
 5. Clique em **Salvar base Excel** para gravar a planilha. No Chrome/Edge, os salvamentos seguintes gravam no mesmo arquivo.
 
@@ -22,9 +22,9 @@ Aplicação web para administrar as **demandas financeiras das Secretarias por p
 | **Secretarias** | Uma tela por Unidade Orçamentária: busca, filtro por competência, **filtros de coluna estilo Excel**, inclusão/edição/exclusão de despesas, Folha, consulta de demanda (texto de despacho) e lançamentos "fora do quadro". |
 | **Relatórios** | Consolidado, Detalhado, Resumo por Ficha, e Essencial por Período / por competência de início. Botão **Imprimir / PDF**. |
 | **Exportar** | XLSX, XLS ou CSV: base completa, consolidado ou uma secretaria, com filtro de competência. |
-| **Configurações** | Secretarias (incluir, editar, remover), **colunas do arquivo Fiorilli** e dados locais. |
+| **Configurações** | Secretarias (incluir, editar, remover), **filtro de reservas** (processos e fontes), **colunas do relatório Fiorilli** e dados locais. |
 
-Os botões **🌙 Modo escuro** e a **versão (v1.1)** ficam no cabeçalho.
+Os botões **🌙 Modo escuro** e a **versão (v1.2)** ficam no cabeçalho.
 
 ---
 
@@ -32,46 +32,64 @@ Os botões **🌙 Modo escuro** e a **versão (v1.1)** ficam no cabeçalho.
 
 | Campo | Origem | Observação |
 |---|---|---|
-| Nº Ficha | **Fiorilli**, coluna `V` (FICHA) | Chave de ligação entre o Fiorilli e a planilha |
-| U.E | **Fiorilli**, coluna `AT` (CODLO) | Os 4 primeiros dígitos definem a secretaria (020101 → 02.01) |
-| Fonte de Recurso | **Fiorilli**, coluna `AZ` (FONGRUPO) | "01" é gravado como "1", igual à planilha |
-| Cód. Despesa | **Fiorilli**, coluna `AV` (CATEC) | "3.3.90.39.00" é gravado como "3.3.90.39" (4 níveis, como na planilha) |
-| Reserva | **Fiorilli**, coluna `BK` (SALDORESERVA) | |
-| Saldo Ficha | **Fiorilli**, coluna `BD` (SALDO_RESERVA) | Resíduos como `1,16E-10` viram 0 |
+| Nº Ficha | **Fiorilli**, coluna `R` | Chave de ligação entre o Fiorilli e a planilha |
+| U.E | **Fiorilli**, coluna `W` | Os 4 primeiros dígitos definem a secretaria (020101 → 02.01) |
+| Fonte de Recurso | **Fiorilli**, coluna `BD` | "01" é gravado como "1", igual à planilha |
+| Cód. Despesa | **Fiorilli**, coluna `Y` | "3.3.90.39.00" é gravado como "3.3.90.39" (4 níveis, como na planilha) |
+| Processo | **Fiorilli**, coluna `AS` | Usado só no filtro (001.003, 001.003.1, 001.003.3…) |
+| Reserva | **Fiorilli**, coluna `BL` (Saldo da Reserva) | **Soma das notas da ficha que atendem ao filtro** (seção 3) |
+| Saldo Ficha | **Fiorilli**, coluna `BM` | Saldo orçamentário da ficha na **última nota** do relatório. Opcional |
 | Descrição | Usuário | Nunca alterado pela integração |
 | Essencial | Usuário | Nunca alterado pela integração |
 | Observação (Período) | Usuário, **seleção padronizada** | Ver seção 4 |
 | Anotações | Usuário (novo na v1.1) | Notas livres que antes ficavam misturadas na Observação |
 | Antes, Cortes, Folha | Planilha / usuário | Nunca alterados pela integração |
 
-As letras das colunas podem ser alteradas em **Configurações → Integração Fiorilli**, caso o layout do arquivo mude. A pré-visualização sempre mostra o título encontrado em cada coluna, para você conferir.
+As letras das colunas podem ser alteradas em **Configurações → Integração Fiorilli**, caso o layout do arquivo mude. Processo e Saldo Ficha podem ficar em branco (sem Saldo Ficha, o saldo da planilha é mantido). A pré-visualização mostra, para cada campo, o valor encontrado na 1ª nota do arquivo, para você conferir.
 
 ---
 
-## 3. Atualização com o Fiorilli
+## 3. Atualização com o Fiorilli (relatório de Notas de Reserva)
+
+Desde a v1.2, o botão **Atualizar Fiorilli** usa o **relatório de Notas de Reserva** (`download-dd-mm-aaaa.xls`) no lugar do antigo `download-SaldoDotacao-*.csv`. O relatório tem **uma linha por nota** (reserva, anulação ou reforço), com várias notas por ficha.
+
+**Regra da Reserva (quanto cada secretaria pode gastar):**
+- **Reserva da ficha = soma do "Saldo da Reserva" (coluna BL) das notas que atendem ao filtro.**
+- Filtro padrão: **processo** (coluna AS) igual a `001.003`, `001.003.1` ou `001.003.3` **e** **Fonte 1**.
+- A comparação do processo é **exata**: `001.003` não inclui `001.003.2`.
+- O filtro é alterado em **Configurações → Filtro de reservas**:
+  - processos e fontes separados por vírgula;
+  - `(vazio)` seleciona as notas **sem** número de processo;
+  - campo vazio = sem restrição.
+- Notas de anulação já vêm com saldo 0, então a soma é o saldo atual.
 
 **Regras aplicadas:**
 - **Fichas que já existem na planilha:** U.E, Fonte, Despesa, Reserva e Saldo são atualizados.
+  - A Reserva pode ficar **0** quando nenhuma nota da ficha atende ao filtro.
   - Quando a ficha ocupa várias linhas (itens), Reserva e Saldo ficam na 1ª linha e as demais ficam com 0. Assim a soma continua igual ao SUBTOTAL do Excel.
-- **Fichas novas** (existem no Fiorilli e não na planilha) entram com Descrição e Essencial em branco. Na pré-visualização você escolhe quais incluir:
-  - **Fontes:** por padrão, só as que já são usadas na planilha (hoje, a fonte 1).
+- **Fichas novas** (com notas dentro do filtro e que não estão na planilha) entram com Descrição e Essencial em branco. Na pré-visualização você escolhe quais incluir:
   - **Despesas de pessoal (3.1.x):** não incluídas por padrão.
-  - **Fichas com Reserva e Saldo zerados:** não incluídas por padrão.
-- **Fichas da planilha que não existem no Fiorilli** são **mantidas** e listadas para você conferir.
+  - **Fichas com Saldo da Reserva zerado:** não incluídas por padrão.
+  - Fichas novas **sem nenhuma nota no filtro** não são sugeridas ("fora do filtro").
+- **Fichas da planilha que não existem no relatório** são **mantidas** e listadas para você conferir.
+- A pré-visualização mostra o **Saldo da reserva por processo** e a **Reserva por secretaria (atual × após)**.
 - Antes de aplicar, a aplicação sugere baixar uma **cópia de segurança** da base (XLSX).
 
-**Resultado com os arquivos reais** (planilha de 01/10/2026 + Fiorilli de 02/10/2026):
+**Validação do mapeamento:** a soma da coluna BL por ficha foi comparada com a coluna SALDORESERVA do `download-SaldoDotacao-05-10-2026.csv`. **323 de 324 fichas** bateram. A única diferença foi a ficha 713, por causa da data diferente dos arquivos.
+
+**Resultado com os arquivos reais** (Planilha Léo Outubro + `download-15-09-2026.xls`):
 
 | Item | Quantidade |
 |---|---|
-| Fichas lidas no Fiorilli | 852 |
-| Fichas sem alteração (confirma o mapeamento das colunas) | 280 |
-| Fichas atualizadas | 162 (85 Reserva, 106 Saldo, 21 U.E, 9 Cód. Despesa) |
-| Fichas novas incluídas (fonte 1, sem pessoal e sem zeradas) | 5 |
-| Fichas novas ignoradas pelo filtro padrão | 405 |
-| Fichas da planilha ausentes no Fiorilli | 1 (texto "Criar" na aba 02.40) |
+| Notas lidas / dentro do filtro | 9.878 / 382 |
+| Saldo da reserva no filtro | R$ 18.001.349,21 (001.003: 12.072.576,70 · 001.003.1: 5.507.309,20 · 001.003.3: 421.463,31) |
+| Fichas lidas no relatório | 472 |
+| Fichas atualizadas / sem alteração | 73 / 205 |
+| Fichas novas fora do filtro (não sugeridas) | 194 |
+| Fichas da planilha ausentes no relatório (sem reservas) | 167 |
+| Reserva total da planilha | R$ 19.414.335,54 → R$ 18.001.349,21 |
 
-> As 30 alterações de **U.E e Cód. Despesa** são divergências cadastrais na planilha que foram corrigidas com o dado oficial. Exemplos: ficha 202 (Educação) estava com U.E 020602, que é da Saúde; ficha 71 estava como 3.3.90.39, e o oficial é 3.3.90.47. Elas aparecem uma a uma na pré-visualização.
+> **Atenção — Saúde (02.06):** a Reserva cai de R$ 1.424.666,83 para R$ 11.680,50. A maior parte das reservas Fonte 1 da Saúde (cerca de R$ 2,04 mi) **não tem número de processo** na coluna AS, por isso fica fora do filtro padrão. Se essas reservas devem contar, inclua `(vazio)` nos processos em Configurações.
 
 ---
 
@@ -165,7 +183,7 @@ controleOrcamentario/
 │       │   ├── calculos.js        totais, filtros, agrupamentos, consulta, conferência
 │       │   ├── importer.js        leitura de planilhas (layout por abas / tabela plana / CSV)
 │       │   ├── exporter.js        geração de XLSX/XLS/CSV no layout original
-│       │   ├── fiorilli.js        INTEGRAÇÃO FIORILLI: ler → planejar → aplicar (imutável)
+│       │   ├── fiorilli.js        INTEGRAÇÃO FIORILLI: ler notas + filtro → planejar → aplicar (imutável)
 │       │   ├── store.js           estado + autossalvamento + preferências
 │       │   └── fileService.js     salvar no mesmo arquivo / download
 │       ├── ui/
@@ -186,18 +204,20 @@ controleOrcamentario/
 | Elemento | data-testid |
 |---|---|
 | Atualizar Fiorilli / arquivo / aplicar | `btn-fiorilli`, `input-fiorilli-arquivo`, `btn-fiorilli-aplicar` |
-| Resumo e opções do Fiorilli | `fiorilli-resumo-*`, `fiorilli-colunas`, `fiorilli-fonte-1`, `fiorilli-incluir-pessoal`, `fiorilli-incluir-zeradas`, `fiorilli-backup` |
-| Detalhes do Fiorilli | `fiorilli-alteracoes-tabela`, `fiorilli-inclusoes-tabela`, `fiorilli-ignoradas`, `fiorilli-ausentes-tabela` |
+| Resumo e opções do Fiorilli | `fiorilli-resumo-*`, `fiorilli-colunas`, `fiorilli-filtro`, `fiorilli-processos`, `fiorilli-incluir-pessoal`, `fiorilli-incluir-zeradas`, `fiorilli-backup` |
+| Detalhes do Fiorilli | `fiorilli-secretarias-tabela`, `fiorilli-alteracoes-tabela`, `fiorilli-inclusoes-tabela`, `fiorilli-ignoradas`, `fiorilli-ausentes-tabela` |
+| Filtro de reservas (v1.2) | `input-filtro-processos`, `input-filtro-fontes`, `btn-salvar-filtro-reservas`, `btn-restaurar-filtro-reservas` |
 | Filtro de coluna | `filtro-coluna-<campo>`, `filtro-popover-<campo>`, `filtro-busca-<campo>`, `filtro-todos-<campo>`, `filtro-opcao-<campo>`, `filtro-ok-<campo>`, `filtro-ordem-asc-<campo>`, `filtro-limpar-<campo>`, `btn-limpar-filtros` |
 | Período no formulário | `input-linha-periodoInicio`, `input-linha-periodoFim`, `btn-periodo-ate-dezembro`, `btn-periodo-mes-unico`, `aviso-periodo-legado` |
 | Modo escuro / versão | `btn-tema` (`aria-pressed`), `app-versao`, `rodape-versao` |
 | Colunas do Fiorilli | `input-fiorilli-coluna-<campo>`, `btn-salvar-colunas-fiorilli` |
 
-- **Testes:** abra `tests/index.html`. São **84 testes**, todos passando. A v1.1 acrescenta:
+- **Testes:** abra `tests/index.html`. São **99 testes**, todos passando. A v1.1 e a v1.2 acrescentam:
   - padrão de período, com os textos reais da planilha;
   - filtros de coluna;
   - normalizações do Fiorilli;
-  - planejamento e aplicação da integração, usando linhas reais do CSV.
+  - filtro de reservas (processos, fontes, `(vazio)`, validações);
+  - leitura, planejamento e aplicação da integração, usando notas reais do relatório de reservas.
 
   O resultado fica em `window.__RESULTADO_TESTES__`.
 
@@ -209,7 +229,7 @@ A leitura e gravação de Excel usam o **SheetJS** (`xlsx 0.18.5`), carregado do
 1. Salve o `xlsx.full.min.js` em `assets/vendor/`.
 2. Troque o `src` do script no `index.html`.
 
-Sem a biblioteca, os arquivos **CSV** (inclusive o do Fiorilli) continuam funcionando.
+Sem a biblioteca, só os arquivos **CSV** funcionam. O relatório de reservas do Fiorilli é `.xls`; para usá-lo offline, salve-o como CSV no Excel (mesmas colunas).
 
 ---
 
@@ -219,8 +239,9 @@ Sem a biblioteca, os arquivos **CSV** (inclusive o do Fiorilli) continuam funcio
 2. **Revisar as 14 linhas "⚠ Não padronizado"** e decidir o tratamento da ficha "Criar" (02.40).
 3. **Distribuição mensal do Essencial** (alternativa 2 da seção 4), para projeção de fluxo de caixa.
 4. **Histórico de atualizações Fiorilli** (comparar o saldo de 02/10 com o de 09/10, por exemplo).
-5. Perfis de acesso por secretaria e trilha de auditoria, se houver um servidor.
-6. Testes E2E com Playwright usando os `data-testid` existentes.
+5. **Perfis Usuário e Administrador** (planejado): o Administrador altera Configurações (filtro de reservas, colunas, secretarias); o Usuário só lança despesas. Para ter controle de acesso real, é preciso um servidor, porque hoje tudo roda no navegador. Depois, perfis por secretaria e trilha de auditoria.
+6. **Decidir o tratamento das reservas sem processo** (ex.: Saúde, cerca de R$ 2,04 mi na Fonte 1). Ver seção 3.
+7. Testes E2E com Playwright usando os `data-testid` existentes.
 
 ---
 
@@ -228,7 +249,8 @@ Sem a biblioteca, os arquivos **CSV** (inclusive o do Fiorilli) continuam funcio
 
 | Versão | Data | Mudanças |
 |---|---|---|
-| **v1.1** | 02/10/2026 | Integração **Fiorilli** (CSV oficial, colunas configuráveis, pré-visualização e cópia de segurança). **Padrão de período** (mês inicial/final) com conversão automática dos textos antigos. Novo campo **Anotações**. **Filtros de coluna estilo Excel**. **Modo escuro**. **Número de versão** na interface. |
+| **v1.2** | 06/10/2026 | **Atualizar Fiorilli** passa a usar o **relatório de Notas de Reserva** (`download-dd-mm-aaaa.xls`). A Reserva vira a soma do Saldo da Reserva das notas filtradas por **processo** (coluna AS: 001.003, 001.003.1, 001.003.3) e **Fonte 1**. Novo **Filtro de reservas** em Configurações, editável pelo usuário. Pré-visualização com **Reserva por secretaria** e saldo por processo. As colunas antigas salvas no navegador são migradas automaticamente. |
+| v1.1 | 02/10/2026 | Integração **Fiorilli** (CSV oficial, colunas configuráveis, pré-visualização e cópia de segurança). **Padrão de período** (mês inicial/final) com conversão automática dos textos antigos. Novo campo **Anotações**. **Filtros de coluna estilo Excel**. **Modo escuro**. **Número de versão** na interface. |
 | v1.0 | 02/10/2026 | Versão inicial: importação/exportação XLSX/XLS/CSV, Painel, 21 Secretarias, Relatórios, Exportar, Configurações, conferência de totais e consulta de demanda. |
 
 A versão fica em `assets/js/core/config.js` (`APP_VERSAO`), que é a fonte única exibida no cabeçalho e no rodapé.

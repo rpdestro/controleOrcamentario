@@ -62,27 +62,39 @@
   });
 
   /**
-   * Integração Fiorilli ("download-SaldoDotacao-*.csv"): letra da coluna de cada campo.
-   * Pode ser alterado pelo usuário em Configurações (caso o layout do Fiorilli mude).
-   * Nomes das colunas no arquivo de 02/10/2026: V=FICHA, AT=CODLO, AV=CATEC,
-   * AZ=FONGRUPO, BD=SALDO_RESERVA, BK=SALDORESERVA.
+   * Integração Fiorilli — relatório de Notas de Reserva ("download-dd-mm-aaaa.xls"):
+   * letra da coluna de cada campo. Pode ser alterado pelo usuário em Configurações.
+   * Conferido no arquivo de 15/09/2026: R=Ficha, W=U.E, Y=Despesa, BD=Fonte,
+   * AS=Processo, BL=Saldo da Reserva, BM=Saldo orçamentário da ficha.
+   * (Layout antigo "download-SaldoDotacao-*.csv": V, AT, AZ, AV, BK, BD e sem processo.)
    */
   const FIORILLI_COLUNAS_PADRAO = Object.freeze({
-    ficha: 'V',
-    ue: 'AT',
-    fonte: 'AZ',
-    despesa: 'AV',
-    reserva: 'BK',
-    saldoFicha: 'BD'
+    ficha: 'R',
+    ue: 'W',
+    fonte: 'BD',
+    despesa: 'Y',
+    processo: 'AS',
+    reserva: 'BL',
+    saldoFicha: 'BM'
+  });
+
+  /**
+   * Filtro das notas que compõem a Reserva (quanto cada secretaria pode gastar).
+   * Lista vazia = sem restrição. Alterável em Configurações.
+   */
+  const FILTRO_RESERVAS_PADRAO = Object.freeze({
+    processos: Object.freeze(['001.003', '001.003.1', '001.003.3']),
+    fontes: Object.freeze(['1'])
   });
 
   App.core.config = Object.freeze({
     APP_NOME: 'Planejamento e Orçamento',
-    APP_VERSAO: '1.1.0',
+    APP_VERSAO: '1.2.0',
     ORGAO: 'Prefeitura Municipal de Botucatu',
     STORAGE_KEY: 'orcamento-botucatu:v1',
     TEMA_STORAGE_KEY: 'orcamento-botucatu:tema',
     FIORILLI_COLUNAS_PADRAO,
+    FILTRO_RESERVAS_PADRAO,
     VERSAO_DADOS: 1,
     PADRAO_CODIGO_SECRETARIA: /^\d{2}\.\d{2}$/,
     TOLERANCIA_CONFERENCIA: 0.01,

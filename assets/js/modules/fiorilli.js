@@ -1,9 +1,10 @@
 /**
  * @file fiorilli.js (módulo)
  * @description Fluxo "Atualizar com Fiorilli":
- *  1) seleção do arquivo oficial (CSV, ou XLS/XLSX com o mesmo layout);
- *  2) pré-visualização: conferência das colunas, resumo, alterações campo a
- *     campo, fichas novas (com regras de inclusão ajustáveis) e fichas ausentes;
+ *  1) seleção do relatório de Notas de Reserva (XLS/XLSX, ou CSV com o mesmo layout);
+ *  2) pré-visualização: conferência das colunas, filtro de processos/fontes em uso,
+ *     Reserva por secretaria (antes x depois), alterações campo a campo,
+ *     fichas novas (com regras de inclusão ajustáveis) e fichas ausentes;
  *  3) cópia de segurança opcional + aplicação.
  * Descrição, Essencial, Período, Antes, Cortes e Folha NUNCA são alterados.
  */
@@ -50,20 +51,55 @@
     });
   }
 
-  /** Conferência: letra configurada x título encontrado no arquivo. */
-  function conferenciaColunas(colunas, cabecalho) {
-    const linhas = fiorilli.CAMPOS_OFICIAIS.map((c) => ({ campo: fiorilli.ROTULOS[c], letra: colunas[c], titulo: cabecalho[c] || '—' }));
+  /** Conferência: letra configurada x título (se houver) e valor da 1ª nota do arquivo. */
+  function conferenciaColunas(colunas, cabecalho, exemplo) {
+    const linhas = fiorilli.CAMPOS_OFICIAIS.map((c) => ({
+      campo: fiorilli.ROTULOS[c],
+      letra: colunas[c] || '(não usada)',
+      titulo: cabecalho[c] || '—',
+      exemplo: exemplo[c] || '—'
+    }));
     return tabela({
       testid: 'fiorilli-colunas',
       legenda: 'Colunas utilizadas (confira com o arquivo)',
-      colunas: [{ rotulo: 'Campo', chave: 'campo' }, { rotulo: 'Coluna', chave: 'letra' }, { rotulo: 'Título no arquivo', chave: 'titulo' }],
+      colunas: [
+        { rotulo: 'Campo', chave: 'campo' }, { rotulo: 'Coluna', chave: 'letra' },
+        { rotulo: 'Título no arquivo', chave: 'titulo' }, { rotulo: 'Valor na 1ª nota', chave: 'exemplo' }
+      ],
       linhas
     });
   }
 
-  /** Regras para inclusão de fichas novas (fonte, pessoal, zeradas). */
-  function formularioOpcoes(plano, opcoes, aoAlterar) {
-    const fontes = Object.keys(plano.fontesNovas).sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
+  /** Filtro em uso (processos/fontes) — alterável somente em Configurações. */
+  function blocoFiltro(filtro, resumo) {
+    const lista = (itens, todos) => (itens.length ? itens.join(', ') : todos);
+    const processos = Object.entries(resumo.porProcesso)
+      .sort(([a], [b]) => a.localeCompare(b, 'pt-BR', { numeric: true }))
+      .map(([processo, p]) => ({ processo: processo || '(vazio)', notas: p.notas, fichas: p.fichas, saldo: p.saldo }));
+    return criar('section', {
+      classe: 'fiorilli__filtro',
+      testid: 'fiorilli-filtro',
+      filhos: [
+        alerta({
+          nivel: 'info',
+          mensagem: `Reserva = soma do Saldo da Reserva das notas com processo ${lista(filtro.processos, '(qualquer)')} e fonte ${lista(filtro.fontes, '(qualquer)')}. ` +
+            `${resumo.notasFiltradas} de ${resumo.notas} notas atendem ao filtro. Para mudar a regra, use Configurações → Filtro de reservas.`
+        }),
+        processos.length ? tabela({
+          testid: 'fiorilli-processos',
+          legenda: 'Saldo da reserva por processo (notas dentro do filtro)',
+          colunas: [
+            { rotulo: 'Processo', chave: 'processo' }, { rotulo: 'Notas', chave: 'notas', numerico: true },
+            { rotulo: 'Fichas', chave: 'fichas', numerico: true }, { rotulo: 'Saldo da Reserva', chave: 'saldo', moeda: true }
+          ],
+          linhas: processos
+        }) : null
+      ]
+    });
+  }
+
+  /** Regras para inclusão de fichas novas (pessoal, zeradas). */
+  function formularioOpcoes(opcoes, aoAlterar) {
     const caixa = ({ testid, rotulo, marcado, aoMudar }) => {
       const input = criar('input', { testid, attrs: { type: 'checkbox', checked: marcado } });
       input.addEventListener('change', () => aoMudar(input.checked));
@@ -74,34 +110,27 @@
       classe: 'form__grupo-radio fiorilli__opcoes',
       testid: 'fiorilli-opcoes',
       filhos: [
-        criar('legend', { classe: 'form__rotulo', texto: 'Fichas novas (existem no Fiorilli e não na planilha) — incluir:' }),
-        ...fontes.map((f) => caixa({
-          testid: `fiorilli-fonte-${f}`,
-          rotulo: `Fonte ${f} (${plano.fontesNovas[f]} fichas)`,
-          marcado: !opcoes.fontes || opcoes.fontes.includes(f),
-          aoMudar: (marcado) => {
-            const atuais = new Set(opcoes.fontes || fontes);
-            if (marcado) atuais.add(f); else atuais.delete(f);
-            aoAlterar({ ...opcoes, fontes: [...atuais] });
-          }
-        })),
+        criar('legend', { classe: 'form__rotulo', texto: 'Fichas novas (com reservas no filtro e que não estão na planilha) — incluir:' }),
         caixa({ testid: 'fiorilli-incluir-pessoal', rotulo: 'Incluir despesas de pessoal (3.1.x)', marcado: opcoes.incluirPessoal, aoMudar: (v) => aoAlterar({ ...opcoes, incluirPessoal: v }) }),
-        caixa({ testid: 'fiorilli-incluir-zeradas', rotulo: 'Incluir fichas com Reserva e Saldo zerados', marcado: opcoes.incluirZeradas, aoMudar: (v) => aoAlterar({ ...opcoes, incluirZeradas: v }) }),
-        criar('small', { classe: 'form__dica', texto: 'Por padrão são sugeridas apenas as fontes já usadas na planilha. Fichas já existentes são sempre atualizadas.' })
+        caixa({ testid: 'fiorilli-incluir-zeradas', rotulo: 'Incluir fichas com Saldo da Reserva zerado', marcado: opcoes.incluirZeradas, aoMudar: (v) => aoAlterar({ ...opcoes, incluirZeradas: v }) }),
+        criar('small', { classe: 'form__dica', texto: 'Fichas já existentes na planilha são sempre atualizadas (a Reserva vira a soma das notas do filtro, podendo ficar 0).' })
       ]
     });
   }
 
   /** Resumo numérico do plano. */
-  function resumoPlano(plano, meta) {
+  function resumoPlano(plano, meta, resumo) {
     const itens = [
       ['Arquivo', meta.arquivo],
       ['Data dos saldos', meta.dataSaldos || 'não identificada'],
+      ['Notas lidas no arquivo', resumo.notas],
+      ['Notas dentro do filtro', resumo.notasFiltradas],
       ['Fichas lidas no arquivo', plano.totalRegistros],
       ['Fichas a atualizar', plano.atualizacoes.length],
       ['Fichas sem alteração', plano.inalteradas],
       ['Fichas novas a incluir', plano.inclusoes.length],
       ['Fichas novas ignoradas', plano.ignoradas.length],
+      ['Fichas novas fora do filtro', plano.foraDoFiltro],
       ['Sem secretaria cadastrada', plano.semSecretaria.length],
       ['Na planilha, mas ausentes no Fiorilli', plano.ausentes.length]
     ];
@@ -123,7 +152,22 @@
       { rotulo: 'Reserva', chave: 'reserva', moeda: true }, { rotulo: 'Saldo Ficha', chave: 'saldoFicha', moeda: true }
     ];
 
+    const secretariasAlteradas = plano.porSecretaria
+      .filter((s) => Math.abs(s.depois - s.antes) > 0.005)
+      .map((s) => ({ ...s, diferenca: s.depois - s.antes }));
+
     return [
+      secaoDetalhe({
+        titulo: 'Reserva por secretaria (quanto pode gastar)',
+        testid: 'fiorilli-secretarias',
+        aberto: true,
+        colunas: [
+          { rotulo: 'Secretaria', chave: 'codigo' }, { rotulo: 'Nome', chave: 'nome' },
+          { rotulo: 'Reserva atual', chave: 'antes', moeda: true }, { rotulo: 'Reserva após', chave: 'depois', moeda: true },
+          { rotulo: 'Diferença', chave: 'diferenca', moeda: true }
+        ],
+        linhas: secretariasAlteradas
+      }),
       secaoDetalhe({
         titulo: 'Alterações nas fichas existentes',
         testid: 'fiorilli-alteracoes',
@@ -157,7 +201,9 @@
   /** Abre o fluxo de atualização. */
   function abrir() {
     const colunas = store.getColunasFiorilli();
-    const contexto = { registros: [], alertas: [], cabecalho: {}, meta: null, opcoes: null, plano: null };
+    const filtro = store.getFiltroReservas();
+    const contexto = { registros: [], alertas: [], cabecalho: {}, exemplo: {}, resumo: null, meta: null, opcoes: null, plano: null };
+    const descreverColunas = fiorilli.CAMPOS_OFICIAIS.filter((c) => colunas[c]).map((c) => `${fiorilli.ROTULOS[c]}=${colunas[c]}`).join(', ');
 
     const areaPrevia = criar('div', { classe: 'importacao__area-previa', attrs: { 'aria-live': 'polite' } });
     const formulario = criar('form', {
@@ -167,9 +213,9 @@
       filhos: [
         resumoErros('fiorilli-resumo-erros'),
         campo({
-          id: 'fiorilli-arquivo', nome: 'arquivo', rotulo: 'Arquivo do Fiorilli (Saldo de Dotação)', tipo: 'file', obrigatorio: true,
+          id: 'fiorilli-arquivo', nome: 'arquivo', rotulo: 'Relatório de reservas do Fiorilli (Notas de Reserva)', tipo: 'file', obrigatorio: true,
           testid: 'input-fiorilli-arquivo',
-          dica: `Ex.: download-SaldoDotacao-02-10-2026.csv · Colunas: Ficha=${colunas.ficha}, U.E=${colunas.ue}, Fonte=${colunas.fonte}, Despesa=${colunas.despesa}, Reserva=${colunas.reserva}, Saldo=${colunas.saldoFicha} (altere em Configurações).`,
+          dica: `Ex.: download-15-09-2026.xls · Colunas: ${descreverColunas} (altere em Configurações).`,
           attrs: { accept: '.csv,.xlsx,.xls' }
         }),
         areaPrevia
@@ -196,21 +242,21 @@
     function recalcular() {
       contexto.plano = fiorilli.planejar(store.getSecretarias(), contexto.registros, contexto.opcoes);
       limpar(regiaoResultado).append(
-        resumoPlano(contexto.plano, contexto.meta),
+        resumoPlano(contexto.plano, contexto.meta, contexto.resumo),
         ...detalhesPlano(contexto.plano)
       );
     }
 
     function montarPrevia() {
-      contexto.plano = fiorilli.planejar(store.getSecretarias(), contexto.registros, contexto.opcoes);
       limpar(areaPrevia).append(
         criar('section', {
           classe: 'importacao__previa',
           testid: 'fiorilli-previa',
           filhos: [
             criar('h3', { classe: 'importacao__subtitulo', texto: 'Pré-visualização' }),
-            conferenciaColunas(colunas, contexto.cabecalho),
-            formularioOpcoes(contexto.plano, contexto.opcoes, (novas) => { contexto.opcoes = novas; recalcular(); }),
+            conferenciaColunas(colunas, contexto.cabecalho, contexto.exemplo),
+            blocoFiltro(contexto.filtro, contexto.resumo),
+            formularioOpcoes(contexto.opcoes, (novas) => { contexto.opcoes = novas; recalcular(); }),
             regiaoResultado,
             contexto.alertas.length ? criar('details', {
               classe: 'importacao__alertas',
@@ -220,7 +266,7 @@
                 criar('ul', { classe: 'lista-alertas', filhos: contexto.alertas.map((a) => criar('li', { classe: `lista-alertas__item lista-alertas__item--${a.nivel}`, texto: a.mensagem })) })
               ]
             }) : null,
-            alerta({ nivel: 'info', mensagem: 'Descrição, Essencial, Período, Antes, Cortes e Folha não são alterados. Fichas novas entram com Descrição e Essencial em branco.' }),
+            alerta({ nivel: 'info', mensagem: `Descrição, Essencial, Período, Antes, Cortes e Folha não são alterados.${colunas.saldoFicha ? '' : ' Saldo Ficha também é mantido (coluna não configurada).'} Fichas novas entram com Descrição e Essencial em branco.` }),
             criar('label', { classe: 'form__radio', filhos: [backup, criar('span', { texto: 'Baixar cópia de segurança (XLSX) da base atual antes de aplicar' })] })
           ]
         })
@@ -236,13 +282,17 @@
 
       areaPrevia.append(criar('p', { classe: 'carregando', texto: 'Lendo arquivo do Fiorilli…', attrs: { role: 'status' } }));
       try {
-        const lido = fiorilli.lerRegistros(await lerMatriz(arquivo), colunas);
+        const lido = fiorilli.lerRegistros(await lerMatriz(arquivo), colunas, filtro);
         if (!lido.registros.length) {
           throw new Error(`Nenhuma ficha encontrada na coluna ${colunas.ficha}. Verifique o arquivo ou o mapeamento de colunas em Configurações.`);
         }
         Object.assign(contexto, lido, {
-          meta: { arquivo: arquivo.name, dataSaldos: fiorilli.extrairDataArquivo(arquivo.name) || dataBR(arquivo.lastModified) },
-          opcoes: { fontes: fiorilli.fontesDaBase(store.getSecretarias()), incluirPessoal: false, incluirZeradas: false }
+          meta: {
+            arquivo: arquivo.name,
+            dataSaldos: fiorilli.extrairDataArquivo(arquivo.name) || dataBR(arquivo.lastModified),
+            filtro: lido.filtro
+          },
+          opcoes: { incluirPessoal: false, incluirZeradas: false }
         });
         montarPrevia();
         botaoAplicar.disabled = false;

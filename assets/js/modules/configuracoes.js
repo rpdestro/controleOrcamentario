@@ -3,6 +3,8 @@
  * @description Módulo "Configurações":
  *  - cadastro de secretarias (incluir / editar / remover), permitindo
  *    trabalhar com mais ou menos que as 21 secretarias iniciais;
+ *  - filtro de reservas (processos e fontes que compõem a Reserva);
+ *  - colunas do relatório de reservas do Fiorilli;
  *  - manutenção dos dados locais (limpeza do cache do navegador).
  */
 (function (App) {
@@ -126,12 +128,15 @@
       attrs: { novalidate: true, 'aria-label': 'Colunas do arquivo Fiorilli' },
       filhos: [
         resumoErros('form-fiorilli-resumo-erros'),
-        ...fiorilli.CAMPOS_OFICIAIS.map((c) => campo({
-          id: `fiorilli-col-${c}`, nome: c, rotulo: fiorilli.ROTULOS[c], valor: atuais[c], obrigatorio: true,
-          testid: `input-fiorilli-coluna-${c}`,
-          dica: `Padrão: ${App.core.config.FIORILLI_COLUNAS_PADRAO[c]}`,
-          attrs: { maxlength: 3, autocomplete: 'off' }
-        })),
+        ...fiorilli.CAMPOS_OFICIAIS.map((c) => {
+          const opcional = fiorilli.CAMPOS_OPCIONAIS.includes(c);
+          return campo({
+            id: `fiorilli-col-${c}`, nome: c, rotulo: fiorilli.ROTULOS[c], valor: atuais[c], obrigatorio: !opcional,
+            testid: `input-fiorilli-coluna-${c}`,
+            dica: `Padrão: ${App.core.config.FIORILLI_COLUNAS_PADRAO[c]}${opcional ? ' · pode ficar em branco' : ''}`,
+            attrs: { maxlength: 3, autocomplete: 'off' }
+          });
+        }),
         criar('div', {
           classe: 'form__acoes form__campo--largo',
           filhos: [
@@ -149,6 +154,10 @@
       evento.preventDefault();
       const colunas = Object.fromEntries(fiorilli.CAMPOS_OFICIAIS.map((c) => [c, form.elements[c].value.trim().toUpperCase()]));
       if (!aplicarErros(form, fiorilli.validarColunas(colunas).erros)) return;
+      if (!colunas.processo && store.getFiltroReservas().processos.length) {
+        aplicarErros(form, { processo: 'O filtro de reservas usa processos. Esvazie a lista de processos antes de remover esta coluna.' });
+        return;
+      }
       store.definirColunasFiorilli(colunas);
       toast.sucesso('Colunas do Fiorilli salvas.');
     });
@@ -157,8 +166,63 @@
       classe: 'cartao',
       testid: 'config-fiorilli',
       filhos: [
-        criar('h2', { classe: 'cartao__titulo', texto: 'Integração Fiorilli — colunas do arquivo' }),
-        criar('p', { classe: 'cartao__descricao', texto: 'Letra da coluna (como no Excel) de cada campo oficial no arquivo "download-SaldoDotacao-*.csv". Altere somente se o layout do Fiorilli mudar.' }),
+        criar('h2', { classe: 'cartao__titulo', texto: 'Integração Fiorilli — colunas do relatório de reservas' }),
+        criar('p', { classe: 'cartao__descricao', texto: 'Letra da coluna (como no Excel) de cada campo no relatório de Notas de Reserva ("download-dd-mm-aaaa.xls"). Altere somente se o layout do Fiorilli mudar. Sem a coluna Saldo Ficha, o saldo da planilha é mantido.' }),
+        form
+      ]
+    });
+  }
+
+  /** Regra da Reserva: processos (coluna AS) e fontes cujas notas são somadas. */
+  function secaoFiltroReservas() {
+    const fiorilli = App.data.fiorilli;
+    const atual = store.getFiltroReservas();
+    const padrao = App.core.config.FILTRO_RESERVAS_PADRAO;
+    const form = criar('form', {
+      classe: 'form form--grade',
+      testid: 'form-filtro-reservas',
+      attrs: { novalidate: true, 'aria-label': 'Filtro de reservas' },
+      filhos: [
+        resumoErros('form-filtro-reservas-resumo-erros'),
+        campo({
+          id: 'filtro-processos', nome: 'processos', rotulo: `Processos (coluna ${store.getColunasFiorilli().processo || '—'})`,
+          valor: atual.processos.join(', '), testid: 'input-filtro-processos',
+          dica: `Separe por vírgula. Comparação exata (001.003 não inclui 001.003.2). Use "${fiorilli.PROCESSO_VAZIO}" para as notas sem processo. Campo vazio = todos. Padrão: ${padrao.processos.join(', ')}`,
+          attrs: { autocomplete: 'off' }
+        }),
+        campo({
+          id: 'filtro-fontes', nome: 'fontes', rotulo: 'Fontes de recurso',
+          valor: atual.fontes.join(', '), testid: 'input-filtro-fontes',
+          dica: `Separe por vírgula ("01" = "1"). Vazio = todas. Padrão: ${padrao.fontes.join(', ')}`,
+          attrs: { autocomplete: 'off' }
+        }),
+        criar('div', {
+          classe: 'form__acoes form__campo--largo',
+          filhos: [
+            botao({ rotulo: 'Salvar filtro', variante: 'primario', tipo: 'submit', testid: 'btn-salvar-filtro-reservas' }),
+            botao({
+              rotulo: 'Restaurar padrão', testid: 'btn-restaurar-filtro-reservas',
+              aoClicar: () => { store.definirFiltroReservas(fiorilli.normalizarFiltro(padrao)); toast.sucesso('Filtro de reservas restaurado.'); }
+            })
+          ]
+        })
+      ]
+    });
+
+    form.addEventListener('submit', (evento) => {
+      evento.preventDefault();
+      const bruto = { processos: form.elements.processos.value, fontes: form.elements.fontes.value };
+      if (!aplicarErros(form, fiorilli.validarFiltro(bruto, store.getColunasFiorilli()).erros)) return;
+      store.definirFiltroReservas(fiorilli.normalizarFiltro(bruto));
+      toast.sucesso('Filtro de reservas salvo. Ele vale para a próxima atualização Fiorilli.');
+    });
+
+    return criar('section', {
+      classe: 'cartao',
+      testid: 'config-filtro-reservas',
+      filhos: [
+        criar('h2', { classe: 'cartao__titulo', texto: 'Filtro de reservas — quanto cada secretaria pode gastar' }),
+        criar('p', { classe: 'cartao__descricao', texto: 'Na atualização Fiorilli, a Reserva de cada ficha é a soma do "Saldo da Reserva" somente das notas com estes processos e fontes.' }),
         form
       ]
     });
@@ -189,6 +253,7 @@
     container.append(
       cabecalhoPagina({ titulo: 'Configurações', subtitulo: 'Secretarias e dados da aplicação.', testid: 'configuracoes-cabecalho' }),
       secaoSecretarias(),
+      secaoFiltroReservas(),
       secaoFiorilli(),
       secaoDados()
     );

@@ -34,10 +34,13 @@
         ]
       });
     }
+    const regra = info.filtro
+      ? ` Reserva = processos ${info.filtro.processos.join(', ') || '(qualquer)'} · fonte ${info.filtro.fontes.join(', ') || '(qualquer)'}.`
+      : '';
     return alerta({
       nivel: 'sucesso',
       testid: 'painel-fiorilli-status',
-      mensagem: `Saldos oficiais Fiorilli de ${info.dataSaldos || '—'} (arquivo ${info.arquivo}) aplicados em ${dataHoraBR(info.aplicadoEm)}: ${info.atualizadas} fichas atualizadas, ${info.incluidas} incluídas.`
+      mensagem: `Saldos oficiais Fiorilli de ${info.dataSaldos || '—'} (arquivo ${info.arquivo}) aplicados em ${dataHoraBR(info.aplicadoEm)}: ${info.atualizadas} fichas atualizadas, ${info.incluidas} incluídas.${regra}`
     });
   }
 

@@ -23,10 +23,34 @@
     return {
       versao: config.VERSAO_DADOS,
       meta: { arquivo: '', atualizadoEm: '', importadoEm: '', alteradoEm: '', fiorilli: null },
-      preferencias: { colunasFiorilli: { ...config.FIORILLI_COLUNAS_PADRAO } },
+      preferencias: {
+        colunasFiorilli: { ...config.FIORILLI_COLUNAS_PADRAO },
+        filtroReservas: filtroPadrao()
+      },
       secretarias: config.SECRETARIAS_PADRAO.map((s) => criarSecretaria(s)),
       alertas: []
     };
+  }
+
+  function filtroPadrao() {
+    const { processos, fontes } = config.FILTRO_RESERVAS_PADRAO;
+    return { processos: [...processos], fontes: [...fontes] };
+  }
+
+  /**
+   * Colunas salvas pela v1.1 (layout "SaldoDotacao", sem a coluna Processo)
+   * não servem para o relatório de reservas: voltam ao padrão atual.
+   */
+  function colunasSalvas(preferencias) {
+    const salvas = (preferencias || {}).colunasFiorilli;
+    if (!salvas || !('processo' in salvas)) return { ...config.FIORILLI_COLUNAS_PADRAO };
+    return { ...config.FIORILLI_COLUNAS_PADRAO, ...salvas };
+  }
+
+  function filtroSalvo(preferencias) {
+    const salvo = (preferencias || {}).filtroReservas;
+    if (!salvo) return filtroPadrao();
+    return { processos: [...(salvo.processos || [])], fontes: [...(salvo.fontes || [])] };
   }
 
   /** O mês de referência dos períodos acompanha a data da base importada. */
@@ -60,7 +84,8 @@
             ...salvo,
             meta: { ...inicial.meta, ...salvo.meta },
             preferencias: {
-              colunasFiorilli: { ...inicial.preferencias.colunasFiorilli, ...((salvo.preferencias || {}).colunasFiorilli || {}) }
+              colunasFiorilli: colunasSalvas(salvo.preferencias),
+              filtroReservas: filtroSalvo(salvo.preferencias)
             },
             // Dados salvos pela v1.0 têm período em texto livre: criarLinha converte para o padrão.
             secretarias: ordenarSecretarias(salvo.secretarias.map((s) => criarSecretaria(s)))
@@ -136,6 +161,14 @@
     confirmarAlteracao('preferencias:fiorilli');
   }
 
+  const getFiltroReservas = () => filtroSalvo(estado.preferencias);
+
+  /** Processos e fontes cujas notas compõem a Reserva (listas já normalizadas). */
+  function definirFiltroReservas({ processos, fontes }) {
+    estado.preferencias.filtroReservas = { processos: [...processos], fontes: [...fontes] };
+    confirmarAlteracao('preferencias:filtro-reservas');
+  }
+
   /** Inclui (sem id) ou atualiza (com id) uma linha de despesa. */
   function salvarLinha(codigo, dados) {
     const secretaria = exigirSecretaria(codigo);
@@ -195,7 +228,7 @@
 
   App.data.store = Object.freeze({
     carregar, getEstado, getSecretarias, getSecretaria, temDados,
-    substituirDados, aplicarFiorilli, getColunasFiorilli, definirColunasFiorilli, salvarLinha, removerLinha, incorporarPendente, definirFolha,
+    substituirDados, aplicarFiorilli, getColunasFiorilli, definirColunasFiorilli, getFiltroReservas, definirFiltroReservas, salvarLinha, removerLinha, incorporarPendente, definirFolha,
     adicionarSecretaria, atualizarSecretaria, removerSecretaria, limparTudo
   });
 })(window.OrcApp);
