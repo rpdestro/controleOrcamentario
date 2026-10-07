@@ -14,6 +14,10 @@
  * ao FILTRO configurável (processos 001.003 / 001.003.1 / 001.003.3 e Fonte 1).
  * Notas de anulação já vêm com saldo 0, então a soma é o saldo atual.
  *
+ * v1.5: cada ficha guarda também a COMPOSIÇÃO da Reserva (todas as notas,
+ * somadas por processo × fonte), para recalcular a Reserva quando o filtro
+ * muda em Configurações, sem reler o arquivo (planejarRecalculo/aplicarRecalculo).
+ *
  * Fluxo em 3 etapas puras (testáveis):
  *   1. lerRegistros(matriz, colunas, filtro) -> fichas (notas agregadas)
  *   2. planejar(secretarias, registros, op)  -> o que será atualizado/incluído (pré-visualização)
@@ -130,6 +134,101 @@
       (!filtro.fontes.length || filtro.fontes.includes(nota.fonte));
   }
 
+  /* ------------------------ Composição da Reserva (v1.5) ------------------------ */
+
+  /**
+   * Composição = Saldo da Reserva de TODAS as notas da ficha, somado por processo e fonte:
+   *   { [processo ou PROCESSO_VAZIO]: { [fonte]: valor } }
+   * Guardada após a atualização Fiorilli, permite recalcular a Reserva quando o
+   * filtro muda, sem reler o arquivo.
+   */
+  function somarComposicao(composicao, nota) {
+    const processo = nota.processo || PROCESSO_VAZIO;
+    const porFonte = composicao[processo] || (composicao[processo] = {});
+    porFonte[nota.fonte] = arredondar((porFonte[nota.fonte] || 0) + nota.saldoReserva);
+  }
+
+  /** Reserva de uma ficha conforme o filtro (soma das células da composição que atendem a ele). */
+  function reservaPorFiltro(composicao, filtroBruto) {
+    const filtro = normalizarFiltro(filtroBruto);
+    let total = 0;
+    Object.entries(composicao || {}).forEach(([processo, porFonte]) => Object.entries(porFonte).forEach(([fonte, valor]) => {
+      if (atendeFiltro({ processo: processo === PROCESSO_VAZIO ? '' : processo, fonte }, filtro)) total += valor;
+    }));
+    return arredondar(total);
+  }
+
+  /** Processos e fontes presentes nas composições (para oferecer como opção no filtro). */
+  function opcoesDasComposicoes(composicoes) {
+    const processos = new Set();
+    const fontes = new Set();
+    Object.values(composicoes || {}).forEach((c) => Object.entries(c).forEach(([processo, porFonte]) => {
+      processos.add(processo);
+      Object.keys(porFonte).forEach((f) => fontes.add(f));
+    }));
+    const ordenar = (a, b) => a.localeCompare(b, 'pt-BR', { numeric: true });
+    return { processos: [...processos].sort(ordenar), fontes: [...fontes].sort(ordenar) };
+  }
+
+  /**
+   * Plano de recálculo da Reserva com um novo filtro (nada é alterado aqui).
+   * Somente fichas com composição registrada (vindas de uma atualização Fiorilli)
+   * são recalculadas; as demais mantêm a Reserva atual.
+   * @param {Array} secretarias base OFICIAL (sem movimentações)
+   * @param {Object} composicoes ficha -> composição
+   * @param {Object} filtro { processos, fontes }
+   */
+  function planejarRecalculo(secretarias, composicoes, filtro) {
+    const plano = { alteracoes: [], semComposicao: 0, recalculaveis: 0, porSecretaria: [], totalAntes: 0, totalDepois: 0 };
+    secretarias.forEach((s) => {
+      const vistas = new Map(); // ficha -> soma atual da Reserva
+      s.linhas.forEach((l) => vistas.set(l.ficha, arredondar((vistas.get(l.ficha) || 0) + (Number(l.reserva) || 0))));
+      let antesSec = 0;
+      let depoisSec = 0;
+      vistas.forEach((antes, ficha) => {
+        antesSec += antes;
+        if (!composicoes || !composicoes[ficha]) { plano.semComposicao += 1; depoisSec += antes; return; }
+        plano.recalculaveis += 1;
+        const depois = reservaPorFiltro(composicoes[ficha], filtro);
+        depoisSec += depois;
+        if (Math.abs(depois - antes) > TOLERANCIA) plano.alteracoes.push({ codigo: s.codigo, ficha, antes, depois });
+      });
+      plano.porSecretaria.push({ codigo: s.codigo, nome: s.nome, antes: arredondar(antesSec), depois: arredondar(depoisSec) });
+      plano.totalAntes += antesSec;
+      plano.totalDepois += depoisSec;
+    });
+    plano.totalAntes = arredondar(plano.totalAntes);
+    plano.totalDepois = arredondar(plano.totalDepois);
+    return plano;
+  }
+
+  /**
+   * Aplica o recálculo e devolve NOVAS secretarias (imutável): a Reserva da ficha
+   * vai para a 1ª linha (linha-âncora) e as demais linhas da ficha ficam com 0,
+   * como na atualização Fiorilli.
+   */
+  function aplicarRecalculo(secretarias, plano) {
+    const porChave = new Map(plano.alteracoes.map((a) => [`${a.codigo}|${a.ficha}`, a.depois]));
+    return secretarias.map((s) => {
+      if (!plano.alteracoes.some((a) => a.codigo === s.codigo)) return s;
+      const vistas = new Set();
+      const linhas = s.linhas.map((l) => {
+        const chave = `${s.codigo}|${l.ficha}`;
+        if (!porChave.has(chave)) return l;
+        const primeira = !vistas.has(l.ficha);
+        vistas.add(l.ficha);
+        return { ...l, reserva: primeira ? porChave.get(chave) : 0 };
+      });
+      return { ...s, linhas };
+    });
+  }
+
+  /** Composições somente das fichas presentes na base (o que é guardado no navegador). */
+  function composicoesDaBase(secretarias, registros) {
+    const fichas = new Set(secretarias.flatMap((s) => s.linhas.map((l) => l.ficha)));
+    return Object.fromEntries(registros.filter((r) => fichas.has(r.ficha) && r.composicao).map((r) => [r.ficha, r.composicao]));
+  }
+
   /** "download-15-09-2026.xls" -> "15/09/2026" */
   function extrairDataArquivo(nome) {
     const m = String(nome || '').match(/(\d{2})[-_.](\d{2})[-_.](\d{4})/);
@@ -195,9 +294,10 @@
       resumo.notas += 1;
 
       if (!porFicha.has(nota.ficha)) {
-        porFicha.set(nota.ficha, { ficha: nota.ficha, reserva: 0, notas: 0, notasFiltradas: 0, porProcesso: {}, linhaOrigem: i + 1 });
+        porFicha.set(nota.ficha, { ficha: nota.ficha, reserva: 0, notas: 0, notasFiltradas: 0, porProcesso: {}, composicao: {}, linhaOrigem: i + 1 });
       }
       const registro = porFicha.get(nota.ficha);
+      somarComposicao(registro.composicao, nota);
       if (registro.ue && registro.ue !== nota.ue) {
         alertas.push({ nivel: 'aviso', mensagem: `Linha ${i + 1}: ficha ${nota.ficha} com U.E diferente (${registro.ue} → ${nota.ue}). Usada a da última nota.` });
       }
@@ -367,6 +467,7 @@
   App.data.fiorilli = Object.freeze({
     CAMPOS_OFICIAIS, CAMPOS_OPCIONAIS, ROTULOS, PROCESSO_VAZIO,
     letraParaIndice, indiceParaLetra, detectarColunas, validarColunas, normalizarFiltro, validarFiltro, atendeFiltro, listaDeTexto,
-    extrairDataArquivo, codigoPorUe, lerRegistros, planejar, aplicar
+    extrairDataArquivo, codigoPorUe, lerRegistros, planejar, aplicar,
+    reservaPorFiltro, opcoesDasComposicoes, planejarRecalculo, aplicarRecalculo, composicoesDaBase
   });
 })(window.OrcApp);

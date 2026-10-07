@@ -11,7 +11,7 @@
   'use strict';
 
   const { criar } = App.utils.dom;
-  const { dataHoraBR } = App.utils.format;
+  const { dataHoraBR, moeda } = App.utils.format;
   const { cabecalhoPagina, botao, campo, aplicarErros, resumoErros, tabela, alerta } = App.ui.componentes;
   const { validarSecretaria } = App.utils.validators;
   const store = App.data.store;
@@ -173,37 +173,153 @@
     });
   }
 
+  /* ------------------------- Filtro de reservas (v1.5) ------------------------- */
+
+  const LIMITE_FICHAS_PREVIA = 500;
+
+  /** Fichas que passariam a ter saldo projetado negativo (por causa das transferências registradas). */
+  function novasNegativas(novas) {
+    const mov = App.data.movimentacoes;
+    const transferencias = store.getTransferencias();
+    if (!transferencias.length) return [];
+    const antes = new Set(mov.fichasNegativas(store.getSecretarias(), transferencias));
+    return mov.fichasNegativas(novas, transferencias).filter((k) => !antes.has(k));
+  }
+
+  /**
+   * Prévia do recálculo: impacto por secretaria e por ficha. O usuário escolhe
+   * entre recalcular agora, só salvar o filtro (vale na próxima atualização) ou cancelar.
+   */
+  function abrirPreviaRecalculo(filtro, plano) {
+    const fiorilli = App.data.fiorilli;
+    const novas = fiorilli.aplicarRecalculo(store.getSecretarias(), plano);
+    const negativas = novasNegativas(novas);
+    const diferenca = plano.totalDepois - plano.totalAntes;
+    const secretariasAlteradas = plano.porSecretaria
+      .filter((s) => Math.abs(s.depois - s.antes) > 0.005)
+      .map((s) => ({ ...s, diferenca: App.utils.format.arredondar(s.depois - s.antes) }));
+    const fichas = plano.alteracoes.map((a) => ({ ...a, diferenca: App.utils.format.arredondar(a.depois - a.antes) }));
+
+    const conteudo = criar('div', {
+      classe: 'recalculo',
+      testid: 'previa-recalculo',
+      filhos: [
+        alerta({
+          nivel: 'info',
+          mensagem: `Novo filtro: processos ${filtro.processos.join(', ') || '(qualquer)'} · fontes ${filtro.fontes.join(', ') || '(qualquer)'}.`
+        }),
+        criar('dl', {
+          classe: 'resumo-lista',
+          filhos: [
+            ['Reserva total atual', moeda(plano.totalAntes)],
+            ['Reserva total após', moeda(plano.totalDepois)],
+            ['Diferença', `${diferenca > 0 ? '+' : ''}${moeda(diferenca)}`],
+            ['Fichas com Reserva alterada', String(plano.alteracoes.length)],
+            ['Fichas sem composição (mantidas)', String(plano.semComposicao)]
+          ].flatMap(([t, v]) => [
+            criar('dt', { classe: 'resumo-lista__termo', texto: t }),
+            criar('dd', { classe: 'resumo-lista__valor', texto: v, testid: `recalculo-${App.utils.format.slug(t)}` })
+          ])
+        }),
+        plano.semComposicao ? alerta({ nivel: 'aviso', mensagem: 'Fichas sem composição registrada (incluídas manualmente ou ausentes na última atualização Fiorilli) mantêm a Reserva atual.' }) : null,
+        negativas.length ? alerta({
+          nivel: 'erro',
+          testid: 'recalculo-negativas',
+          mensagem: `Com as transferências registradas, ${negativas.length} ficha(s) ficarão com Reserva projetada negativa: ${negativas.slice(0, 10).map((k) => k.replace('|', ' · ficha ')).join('; ')}${negativas.length > 10 ? '…' : ''}. Revise as movimentações depois de recalcular.`
+        }) : null,
+        tabela({
+          testid: 'recalculo-secretarias',
+          legenda: 'Reserva por secretaria',
+          colunas: [
+            { rotulo: 'Secretaria', chave: 'codigo' }, { rotulo: 'Nome', chave: 'nome' },
+            { rotulo: 'Atual', chave: 'antes', moeda: true }, { rotulo: 'Após', chave: 'depois', moeda: true },
+            { rotulo: 'Diferença', chave: 'diferenca', moeda: true }
+          ],
+          linhas: secretariasAlteradas
+        }),
+        criar('details', {
+          classe: 'fiorilli__detalhe',
+          filhos: [
+            criar('summary', { classe: 'fiorilli__resumo-detalhe', texto: `Fichas alteradas (${fichas.length})` }),
+            tabela({
+              testid: 'recalculo-fichas',
+              colunas: [
+                { rotulo: 'Secretaria', chave: 'codigo' }, { rotulo: 'Ficha', chave: 'ficha' },
+                { rotulo: 'Reserva atual', chave: 'antes', moeda: true }, { rotulo: 'Reserva após', chave: 'depois', moeda: true },
+                { rotulo: 'Diferença', chave: 'diferenca', moeda: true }
+              ],
+              linhas: fichas.slice(0, LIMITE_FICHAS_PREVIA)
+            }),
+            fichas.length > LIMITE_FICHAS_PREVIA ? criar('p', { classe: 'form__dica', texto: `Exibindo as primeiras ${LIMITE_FICHAS_PREVIA} fichas.` }) : null
+          ]
+        })
+      ]
+    });
+
+    modal.abrir({
+      titulo: 'Recalcular reservas com o novo filtro',
+      testid: 'modal-recalculo',
+      tamanho: 'largo',
+      conteudo,
+      acoes: [
+        { rotulo: 'Cancelar', testid: 'btn-recalculo-cancelar', aoClicar: ({ fechar }) => fechar() },
+        {
+          rotulo: 'Só salvar o filtro', testid: 'btn-recalculo-so-filtro',
+          aoClicar: ({ fechar }) => { store.definirFiltroReservas(filtro); fechar(); toast.info('Filtro salvo sem recalcular. Ele vale para a próxima atualização Fiorilli.'); }
+        },
+        {
+          rotulo: 'Recalcular reservas', variante: 'primario', testid: 'btn-recalculo-confirmar',
+          aoClicar: ({ fechar }) => {
+            try {
+              store.recalcularReservas(filtro, novas);
+              fechar();
+              toast.sucesso(`Filtro salvo e Reserva recalculada em ${plano.alteracoes.length} ficha(s).`);
+            } catch (erro) {
+              toast.erro(erro.message);
+            }
+          }
+        }
+      ]
+    });
+  }
+
+  /** Salva o filtro; com composição registrada, recalcula as Reservas em tempo real (após a prévia). */
+  function salvarFiltro(filtro) {
+    if (!store.temComposicaoReservas()) {
+      store.definirFiltroReservas(filtro);
+      toast.sucesso('Filtro de reservas salvo. Ele vale para a próxima atualização Fiorilli (ainda não há composição das reservas registrada).');
+      return;
+    }
+    const plano = App.data.fiorilli.planejarRecalculo(store.getSecretarias(), store.getComposicaoReservas(), filtro);
+    if (!plano.alteracoes.length) {
+      store.definirFiltroReservas(filtro);
+      toast.sucesso('Filtro de reservas salvo. Nenhuma Reserva muda com este filtro.');
+      return;
+    }
+    abrirPreviaRecalculo(filtro, plano);
+  }
+
   /** Regra da Reserva: processos (coluna AS) e fontes cujas notas são somadas. */
   function secaoFiltroReservas() {
     const fiorilli = App.data.fiorilli;
-    const atual = store.getFiltroReservas();
     const padrao = App.core.config.FILTRO_RESERVAS_PADRAO;
+    const seletor = App.ui.seletorFiltroReservas.criar({ filtro: store.getFiltroReservas(), testid: 'filtro-reservas' });
     const form = criar('form', {
       classe: 'form form--grade',
       testid: 'form-filtro-reservas',
       attrs: { novalidate: true, 'aria-label': 'Filtro de reservas' },
       filhos: [
         resumoErros('form-filtro-reservas-resumo-erros'),
-        campo({
-          id: 'filtro-processos', nome: 'processos', rotulo: `Processos (coluna ${store.getColunasFiorilli().processo || '—'})`,
-          valor: atual.processos.join(', '), testid: 'input-filtro-processos',
-          dica: `Separe por vírgula. Comparação exata (001.003 não inclui 001.003.2). Use "${fiorilli.PROCESSO_VAZIO}" para as notas sem processo. Campo vazio = todos. Padrão: ${padrao.processos.join(', ')}`,
-          attrs: { autocomplete: 'off' }
-        }),
-        campo({
-          id: 'filtro-fontes', nome: 'fontes', rotulo: 'Fontes de recurso',
-          valor: atual.fontes.join(', '), testid: 'input-filtro-fontes',
-          dica: `Separe por vírgula ("01" = "1"). Vazio = todas. Padrão: ${padrao.fontes.join(', ')}`,
-          attrs: { autocomplete: 'off' }
+        seletor.elemento,
+        criar('p', {
+          classe: 'form__dica form__campo--largo',
+          texto: `Processos lidos da coluna ${store.getColunasFiorilli().processo || '—'} do Fiorilli. Padrão: processos ${padrao.processos.join(', ')} · fonte ${padrao.fontes.join(', ')}.`
         }),
         criar('div', {
           classe: 'form__acoes form__campo--largo',
           filhos: [
             botao({ rotulo: 'Salvar filtro', variante: 'primario', tipo: 'submit', testid: 'btn-salvar-filtro-reservas' }),
-            botao({
-              rotulo: 'Restaurar padrão', testid: 'btn-restaurar-filtro-reservas',
-              aoClicar: () => { store.definirFiltroReservas(fiorilli.normalizarFiltro(padrao)); toast.sucesso('Filtro de reservas restaurado.'); }
-            })
+            botao({ rotulo: 'Restaurar padrão', testid: 'btn-restaurar-filtro-reservas', aoClicar: () => salvarFiltro(fiorilli.normalizarFiltro(padrao)) })
           ]
         })
       ]
@@ -211,10 +327,9 @@
 
     form.addEventListener('submit', (evento) => {
       evento.preventDefault();
-      const bruto = { processos: form.elements.processos.value, fontes: form.elements.fontes.value };
+      const bruto = seletor.ler();
       if (!aplicarErros(form, fiorilli.validarFiltro(bruto, store.getColunasFiorilli()).erros)) return;
-      store.definirFiltroReservas(fiorilli.normalizarFiltro(bruto));
-      toast.sucesso('Filtro de reservas salvo. Ele vale para a próxima atualização Fiorilli.');
+      salvarFiltro(fiorilli.normalizarFiltro(bruto));
     });
 
     return criar('section', {
@@ -222,7 +337,11 @@
       testid: 'config-filtro-reservas',
       filhos: [
         criar('h2', { classe: 'cartao__titulo', texto: 'Filtro de reservas — quanto cada secretaria pode gastar' }),
-        criar('p', { classe: 'cartao__descricao', texto: 'Na atualização Fiorilli, a Reserva de cada ficha é a soma do "Saldo da Reserva" somente das notas com estes processos e fontes.' }),
+        criar('p', {
+          classe: 'cartao__descricao',
+          texto: 'A Reserva de cada ficha é a soma do "Saldo da Reserva" somente das notas com estes processos e fontes. ' +
+            'Após uma atualização Fiorilli, salvar o filtro recalcula as Reservas na hora (com prévia do impacto).'
+        }),
         form
       ]
     });

@@ -16,6 +16,7 @@
   const eventos = App.core.events;
   const { criarSecretaria, criarLinha, ordenarSecretarias, definirReferencia } = App.data.schema;
   const periodo = App.utils.periodo;
+  const movimentacoes = App.data.movimentacoes;
 
   let estado = estadoInicial();
 
@@ -28,7 +29,10 @@
         filtroReservas: filtroPadrao()
       },
       secretarias: config.SECRETARIAS_PADRAO.map((s) => criarSecretaria(s)),
-      alertas: []
+      alertas: [],
+      transferencias: [], // v1.4: livro de movimentações (ver data/movimentacoes.js)
+      // v1.5: ficha -> composição da Reserva por processo × fonte (última atualização Fiorilli)
+      composicaoReservas: {}
     };
   }
 
@@ -88,7 +92,11 @@
               filtroReservas: filtroSalvo(salvo.preferencias)
             },
             // Dados salvos pela v1.0 têm período em texto livre: criarLinha converte para o padrão.
-            secretarias: ordenarSecretarias(salvo.secretarias.map((s) => criarSecretaria(s)))
+            secretarias: ordenarSecretarias(salvo.secretarias.map((s) => criarSecretaria(s))),
+            // Campo novo da v1.4 (aditivo): dados antigos começam sem movimentações.
+            transferencias: Array.isArray(salvo.transferencias) ? salvo.transferencias.map(movimentacoes.criar) : [],
+            // Campo novo da v1.5 (aditivo): sem composição, o filtro vale só na próxima atualização Fiorilli.
+            composicaoReservas: salvo.composicaoReservas && typeof salvo.composicaoReservas === 'object' ? salvo.composicaoReservas : {}
           };
         }
       }
@@ -101,10 +109,34 @@
   }
 
   /** Registra a alteração, persiste e notifica a interface. */
-  function confirmarAlteracao(motivo) {
+  function confirmarAlteracao(motivo, detalhes = {}) {
     estado.meta.alteradoEm = new Date().toISOString();
     const salvo = persistir();
-    eventos.emit('estado:alterado', { motivo, salvo });
+    eventos.emit('estado:alterado', { ...detalhes, motivo, salvo });
+  }
+
+  /**
+   * Alteração "tudo ou nada": aplica, persiste e só então notifica.
+   * Se o navegador não conseguir salvar, desfaz a alteração em memória e lança erro.
+   * @param {Function} aplicar   executa a mutação e devolve a função que a desfaz
+   */
+  function alterarComSeguranca(motivo, detalhes, aplicar) {
+    const alteradoAntes = estado.meta.alteradoEm;
+    const desfazer = aplicar();
+    estado.meta.alteradoEm = new Date().toISOString();
+    if (!persistir()) {
+      desfazer();
+      estado.meta.alteradoEm = alteradoAntes;
+      throw new Error('Não foi possível salvar no navegador (armazenamento cheio ou bloqueado). Nada foi alterado.');
+    }
+    eventos.emit('estado:alterado', { ...detalhes, motivo, salvo: true });
+  }
+
+  /** Erro de validação com mensagens por campo ({ campo: mensagem }). */
+  function erroValidacao(erros) {
+    const erro = new Error(Object.values(erros)[0]);
+    erro.erros = erros;
+    return erro;
   }
 
   /* -------------------------------- Consultas -------------------------------- */
@@ -113,6 +145,11 @@
   const getSecretarias = () => estado.secretarias;
   const getSecretaria = (codigo) => estado.secretarias.find((s) => s.codigo === codigo) || null;
   const temDados = () => estado.secretarias.some((s) => s.linhas.length > 0);
+
+  /* Movimentações (v1.4): os valores oficiais não mudam; as telas exibem a projeção. */
+  const getTransferencias = () => [...estado.transferencias];
+  const getSecretariasProjetadas = () => movimentacoes.projetar(estado.secretarias, estado.transferencias);
+  const getSecretariaProjetada = (codigo) => getSecretariasProjetadas().find((s) => s.codigo === codigo) || null;
 
   function exigirSecretaria(codigo) {
     const secretaria = getSecretaria(codigo);
@@ -136,7 +173,9 @@
       ...estado,
       meta: { ...importacao.meta, alteradoEm: '', fiorilli: null },
       secretarias: ordenarSecretarias([...importadas.values(), ...mantidas]),
-      alertas: importacao.alertas || []
+      alertas: importacao.alertas || [],
+      // A Reserva volta a ser a da planilha: a composição do Fiorilli deixa de valer.
+      composicaoReservas: {}
     };
     sincronizarReferencia();
     confirmarAlteracao('importacao');
@@ -145,11 +184,32 @@
   /**
    * Aplica a atualização oficial do Fiorilli (secretarias já calculadas por
    * App.data.fiorilli.aplicar) e registra os dados do arquivo utilizado.
+   * @param {Object} [extras]
+   * @param {Object} [extras.composicoes] ficha -> composição da Reserva (v1.5)
+   * @param {Object} [extras.filtroPadrao] grava também o filtro usado como padrão
    */
-  function aplicarFiorilli(secretarias, metaFiorilli) {
+  function aplicarFiorilli(secretarias, metaFiorilli, { composicoes, filtroPadrao } = {}) {
     estado.secretarias = ordenarSecretarias(secretarias.map((s) => criarSecretaria(s)));
     estado.meta.fiorilli = { ...metaFiorilli, aplicadoEm: new Date().toISOString() };
+    if (composicoes) estado.composicaoReservas = composicoes;
+    if (filtroPadrao) estado.preferencias.filtroReservas = { processos: [...filtroPadrao.processos], fontes: [...filtroPadrao.fontes] };
     confirmarAlteracao('fiorilli');
+  }
+
+  const getComposicaoReservas = () => estado.composicaoReservas;
+  const temComposicaoReservas = () => Object.keys(estado.composicaoReservas).length > 0;
+
+  /**
+   * Grava o filtro de reservas e as secretarias com a Reserva recalculada
+   * (App.data.fiorilli.aplicarRecalculo) numa única alteração "tudo ou nada".
+   */
+  function recalcularReservas({ processos, fontes }, secretarias) {
+    alterarComSeguranca('reservas:recalculadas', {}, () => {
+      const anteriores = { secretarias: estado.secretarias, filtro: estado.preferencias.filtroReservas };
+      estado.secretarias = ordenarSecretarias(secretarias.map((s) => criarSecretaria(s)));
+      estado.preferencias.filtroReservas = { processos: [...processos], fontes: [...fontes] };
+      return () => { estado.secretarias = anteriores.secretarias; estado.preferencias.filtroReservas = anteriores.filtro; };
+    });
   }
 
   const getColunasFiorilli = () => ({ ...estado.preferencias.colunasFiorilli });
@@ -211,6 +271,9 @@
     const secretaria = exigirSecretaria(codigoOriginal);
     secretaria.codigo = codigo.trim();
     secretaria.nome = nome.trim();
+    // As movimentações acompanham a troca de código da secretaria.
+    const renomear = (p) => (p.secretaria === codigoOriginal ? { ...p, secretaria: secretaria.codigo } : p);
+    estado.transferencias = estado.transferencias.map((t) => ({ ...t, origem: renomear(t.origem), destino: renomear(t.destino) }));
     estado.secretarias = ordenarSecretarias(estado.secretarias);
     confirmarAlteracao('secretaria:editada');
   }
@@ -218,6 +281,57 @@
   function removerSecretaria(codigo) {
     estado.secretarias = estado.secretarias.filter((s) => s.codigo !== codigo);
     confirmarAlteracao('secretaria:removida');
+  }
+
+  /* ------------------------------ Transferências ------------------------------ */
+
+  /**
+   * Registra uma transferência entre fichas (mesma ou outra secretaria).
+   * Valida novamente contra os saldos projetados (a interface também valida),
+   * impedindo saldo negativo. Lança erro com `.erros` por campo se inválida.
+   * @param {{origem, destino, saldoFicha, reserva, instrumento?, motivo?}} dados
+   * @returns {Object} o lançamento gravado
+   */
+  function transferir(dados) {
+    const erros = movimentacoes.validar(getSecretariasProjetadas(), dados);
+    if (Object.keys(erros).length) throw erroValidacao(erros);
+    const lancamento = movimentacoes.criar(dados);
+    alterarComSeguranca('transferencia', { transferencia: lancamento }, () => {
+      const anteriores = estado.transferencias;
+      estado.transferencias = [...anteriores, lancamento];
+      return () => { estado.transferencias = anteriores; };
+    });
+    return lancamento;
+  }
+
+  /**
+   * Desfaz (remove) uma transferência. É recusado quando outra movimentação
+   * posterior depende do valor (alguma ficha ficaria com saldo negativo).
+   */
+  function desfazerTransferencia(id) {
+    const lancamento = estado.transferencias.find((t) => t.id === id);
+    if (!lancamento) return;
+    const restantes = estado.transferencias.filter((t) => t.id !== id);
+    const antes = new Set(movimentacoes.fichasNegativas(estado.secretarias, estado.transferencias));
+    const novas = movimentacoes.fichasNegativas(estado.secretarias, restantes).filter((k) => !antes.has(k));
+    if (novas.length) {
+      const [secretaria, ficha] = novas[0].split('|');
+      throw new Error(`Não é possível desfazer: a ficha ${ficha} (${secretaria}) ficaria com saldo negativo. Desfaça antes as movimentações posteriores que usaram esse valor.`);
+    }
+    alterarComSeguranca('transferencia:desfeita', { transferencia: lancamento }, () => {
+      const anteriores = estado.transferencias;
+      estado.transferencias = restantes;
+      return () => { estado.transferencias = anteriores; };
+    });
+  }
+
+  /** Remove todas as movimentações (volta aos saldos oficiais). */
+  function limparTransferencias() {
+    alterarComSeguranca('transferencia:limpeza', {}, () => {
+      const anteriores = estado.transferencias;
+      estado.transferencias = [];
+      return () => { estado.transferencias = anteriores; };
+    });
   }
 
   /** Apaga todos os dados locais e volta à lista padrão de secretarias. */
@@ -228,7 +342,9 @@
 
   App.data.store = Object.freeze({
     carregar, getEstado, getSecretarias, getSecretaria, temDados,
-    substituirDados, aplicarFiorilli, getColunasFiorilli, definirColunasFiorilli, getFiltroReservas, definirFiltroReservas, salvarLinha, removerLinha, incorporarPendente, definirFolha,
-    adicionarSecretaria, atualizarSecretaria, removerSecretaria, limparTudo
+    getTransferencias, getSecretariasProjetadas, getSecretariaProjetada,
+    substituirDados, aplicarFiorilli, getComposicaoReservas, temComposicaoReservas, recalcularReservas, getColunasFiorilli, definirColunasFiorilli, getFiltroReservas, definirFiltroReservas, salvarLinha, removerLinha, incorporarPendente, definirFolha,
+    adicionarSecretaria, atualizarSecretaria, removerSecretaria, limparTudo,
+    transferir, desfazerTransferencia, limparTransferencias
   });
 })(window.OrcApp);

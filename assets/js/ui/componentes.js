@@ -80,11 +80,15 @@
 
     let controle;
     if (tipo === 'select') {
+      // Opção com `opcoes` vira um <optgroup> (rótulo = o.rotulo).
+      const opcao = (o) => (Array.isArray(o.opcoes)
+        ? criar('optgroup', { attrs: { label: o.rotulo }, filhos: o.opcoes.map(opcao) })
+        : criar('option', { texto: o.rotulo, attrs: { value: o.valor, selected: String(o.valor) === String(valor) || null, ...(o.attrs || {}) } }));
       controle = criar('select', {
         classe: 'form__controle',
         testid,
         attrs: atributosComuns,
-        filhos: (opcoes || []).map((o) => criar('option', { texto: o.rotulo, attrs: { value: o.valor, selected: String(o.valor) === String(valor) || null } }))
+        filhos: (opcoes || []).map(opcao)
       });
     } else if (tipo === 'textarea') {
       controle = criar('textarea', { classe: 'form__controle', testid, texto: valor, attrs: { rows: 3, ...atributosComuns } });
@@ -159,12 +163,13 @@
    * @param {string} opcoes.testid
    * @param {string} [opcoes.legenda] caption acessível
    * @param {Function} [opcoes.classeLinha] (linha, índice) => classe extra do <tr>
+   * @param {Function} [opcoes.atributosLinha] (linha) => atributos do <tr> (ex.: { 'data-id': ... })
    * @param {Object} [opcoes.filtro] filtros de coluna estilo Excel (colunas com `filtravel: true`)
    * @param {Object} opcoes.filtro.estado      estado (utils/filtroTabela.js)
    * @param {Array}  opcoes.filtro.linhasBase  linhas antes dos filtros de coluna
    * @param {Function} opcoes.filtro.aoAlterar recebe o novo estado
    */
-  function tabela({ colunas, linhas, rodape, testid, legenda, classeLinha, filtro }) {
+  function tabela({ colunas, linhas, rodape, testid, legenda, classeLinha, atributosLinha, filtro }) {
     const celula = (tag, coluna, conteudo) => criar(tag, {
       classe: ['tabela__celula', coluna.numerico || coluna.moeda ? 'tabela__celula--num' : '', coluna.classe || ''].filter(Boolean).join(' '),
       attrs: tag === 'th' ? { scope: 'col', 'aria-sort': ordenacaoAria(coluna) } : {},
@@ -228,6 +233,7 @@
             filhos: linhas.map((linha, i) => criar('tr', {
               classe: ['tabela__linha', classeLinha ? classeLinha(linha, i) : ''].filter(Boolean).join(' '),
               testid: `${testid}-linha`,
+              attrs: atributosLinha ? atributosLinha(linha, i) : {},
               filhos: colunas.map((c) => celula('td', c, valorCelula(c, linha, i)))
             }))
           }),
@@ -236,6 +242,21 @@
           }) : null
         ]
       })]
+    });
+  }
+
+  /**
+   * Selo da situação orçamentária de uma ficha (ícone + texto: não depende só da cor).
+   * @param {string} situacao deficit | atende | positivo
+   * @param {string} [complemento] texto extra (ex.: valor do déficit)
+   */
+  function seloSituacao(situacao, { complemento = '', testid } = {}) {
+    const info = App.core.config.SITUACOES_FICHA[situacao];
+    return criar('span', {
+      classe: `selo selo--${situacao}`,
+      testid,
+      texto: `${info.icone} ${info.rotulo}${complemento ? ` ${complemento}` : ''}`,
+      attrs: { title: info.descricao, 'data-situacao': situacao }
     });
   }
 
@@ -271,6 +292,6 @@
   }
 
   App.ui.componentes = Object.freeze({
-    botao, kpi, varianteSinal, graficoResultado, campo, aplicarErros, resumoErros, alerta, tabela, estadoVazio, cabecalhoPagina
+    botao, kpi, varianteSinal, graficoResultado, campo, aplicarErros, resumoErros, alerta, tabela, estadoVazio, cabecalhoPagina, seloSituacao
   });
 })(window.OrcApp);

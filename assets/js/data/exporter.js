@@ -18,8 +18,39 @@
   const { filtrarLinhas, filtroAtivo, totaisSecretaria, totaisGerais } = App.data.calculos;
   const { dataBR, slug } = App.utils.format;
 
-  const CABECALHO_ABA = config.CAMPOS_LINHA.map((c) => c.cabecalhoPlanilha);
+  /**
+   * Campos gravados nos arquivos exportados (v1.5: "Antes"/"Valor Anterior" não é exportado;
+   * o campo continua no modelo e, na reimportação, volta como 0).
+   */
+  const CAMPOS_EXPORTACAO = Object.freeze(config.CAMPOS_LINHA.filter((c) => c.chave !== 'antes'));
+  const CABECALHO_ABA = CAMPOS_EXPORTACAO.map((c) => c.cabecalhoPlanilha);
   const FORMATO_NUMERO = '#,##0.00';
+
+  /** 0 -> "A", 27 -> "AB". */
+  function letraColuna(indice) {
+    let letra = '';
+    for (let n = indice + 1; n > 0; n = Math.floor((n - 1) / 26)) letra = String.fromCharCode(65 + ((n - 1) % 26)) + letra;
+    return letra;
+  }
+
+  /** Posição (índice e letra) de cada campo na aba da secretaria — as fórmulas derivam daqui. */
+  const POSICAO = Object.freeze(Object.fromEntries(CAMPOS_EXPORTACAO.map((c, i) => [c.chave, Object.freeze({ indice: i, letra: letraColuna(i) })])));
+  const COL_ESSENCIAL = POSICAO.essencial.letra;
+  const COL_RESERVA = POSICAO.reserva.letra;
+  const COL_SALDO = POSICAO.saldoFicha.letra;
+  /** Rótulos do bloco-resumo ficam na coluna imediatamente antes do Essencial. */
+  const IDX_ROTULO_RESUMO = POSICAO.essencial.indice - 1;
+
+  /** Linha com valores nas colunas indicadas ({ chaveOuIndice: valor }). */
+  function linhaEsparsa(valores) {
+    const linha = [];
+    Object.entries(valores).forEach(([chave, valor]) => {
+      const indice = chave in POSICAO ? POSICAO[chave].indice : Number(chave);
+      while (linha.length < indice) linha.push('');
+      linha[indice] = valor;
+    });
+    return linha;
+  }
 
   const MIME = Object.freeze({
     xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -27,9 +58,9 @@
     csv: 'text/csv;charset=utf-8'
   });
 
-  /** Converte uma linha do modelo em array na ordem de CAMPOS_LINHA. */
+  /** Converte uma linha do modelo em array na ordem de CAMPOS_EXPORTACAO. */
   function linhaParaArray(linha) {
-    return config.CAMPOS_LINHA.map((c) => (c.tipo === 'moeda' ? Number(linha[c.chave]) || 0 : linha[c.chave]));
+    return CAMPOS_EXPORTACAO.map((c) => (c.tipo === 'moeda' ? Number(linha[c.chave]) || 0 : linha[c.chave]));
   }
 
   /** Aplica o filtro (período/busca) a uma secretaria, sem alterar o original. */
@@ -57,36 +88,37 @@
 
     aoa.push([]);
     const linhaSubtotal = aoa.length + 1;
-    aoa.push(['', '', '', '', '', '', -t.essencial, t.antes, t.reserva, t.saldoFicha]);
+    aoa.push(linhaEsparsa({ essencial: -t.essencial, reserva: t.reserva, saldoFicha: t.saldoFicha }));
     aoa.push([]);
     const linhaResumo = aoa.length + 1;
-    aoa.push(['', '', '', '', '', 'Essencial', -t.essencial]);
-    aoa.push(['', '', '', '', '', 'Reserva', t.reserva]);
-    aoa.push(['', '', '', '', '', 'Saldo ficha', t.saldoFicha]);
-    aoa.push(['', '', '', '', '', 'Folha', -t.folha]);
+    const resumo = (rotulo, valor) => linhaEsparsa({ [IDX_ROTULO_RESUMO]: rotulo, essencial: valor });
+    aoa.push(resumo('Essencial', -t.essencial));
+    aoa.push(resumo('Reserva', t.reserva));
+    aoa.push(resumo('Saldo ficha', t.saldoFicha));
+    aoa.push(resumo('Folha', -t.folha));
     const linhaFolha = linhaResumo + 3;
-    aoa.push(['', '', '', '', '', 'TOTAL', t.resultado]);
+    aoa.push(resumo('TOTAL', t.resultado));
     const linhaTotal = linhaResumo + 4;
 
     if (secretaria.pendentes.length) {
       // Rótulo na coluna "Descrição" (sem ficha) para não ser lido como despesa na reimportação.
-      aoa.push([], ['', '', '', '', 'Lançamentos fora do quadro (não somados)']);
+      aoa.push([], linhaEsparsa({ descricao: 'Lançamentos fora do quadro (não somados)' }));
       secretaria.pendentes.forEach((l) => aoa.push(linhaParaArray(l)));
     }
 
     // Fórmulas equivalentes às da planilha original (valores já calculados acima).
+    // As letras vêm de POSICAO (Essencial, Reserva e Saldo ficha).
     const formulas = {};
     if (secretaria.linhas.length) {
-      // G=Essencial, H=Antes, I=Reserva, J=Saldo ficha
-      ['G', 'H', 'I', 'J'].forEach((col) => {
-        const sinal = col === 'G' ? '*-1' : '';
+      [COL_ESSENCIAL, COL_RESERVA, COL_SALDO].forEach((col) => {
+        const sinal = col === COL_ESSENCIAL ? '*-1' : '';
         formulas[`${col}${linhaSubtotal}`] = `SUBTOTAL(9,${col}${inicioDados}:${col}${fimDados})${sinal}`;
       });
     }
-    formulas[`G${linhaResumo}`] = `G${linhaSubtotal}`;
-    formulas[`G${linhaResumo + 1}`] = `I${linhaSubtotal}`;
-    formulas[`G${linhaResumo + 2}`] = `J${linhaSubtotal}`;
-    formulas[`G${linhaTotal}`] = `SUM(G${linhaResumo}:G${linhaFolha})`;
+    formulas[`${COL_ESSENCIAL}${linhaResumo}`] = `${COL_ESSENCIAL}${linhaSubtotal}`;
+    formulas[`${COL_ESSENCIAL}${linhaResumo + 1}`] = `${COL_RESERVA}${linhaSubtotal}`;
+    formulas[`${COL_ESSENCIAL}${linhaResumo + 2}`] = `${COL_SALDO}${linhaSubtotal}`;
+    formulas[`${COL_ESSENCIAL}${linhaTotal}`] = `SUM(${COL_ESSENCIAL}${linhaResumo}:${COL_ESSENCIAL}${linhaFolha})`;
 
     return { aoa, formulas, linhaSubtotal, linhaFolha, linhaTotal };
   }
@@ -109,10 +141,10 @@
       const p = posicoes[t.codigo];
       const aba = `'${t.codigo}'`;
       if (p) {
-        formulas[`C${r}`] = `${aba}!G${p.linhaSubtotal}`;
-        formulas[`D${r}`] = `${aba}!G${p.linhaFolha}`;
-        formulas[`E${r}`] = `${aba}!I${p.linhaSubtotal}`;
-        formulas[`F${r}`] = `${aba}!J${p.linhaSubtotal}`;
+        formulas[`C${r}`] = `${aba}!${COL_ESSENCIAL}${p.linhaSubtotal}`;
+        formulas[`D${r}`] = `${aba}!${COL_ESSENCIAL}${p.linhaFolha}`;
+        formulas[`E${r}`] = `${aba}!${COL_RESERVA}${p.linhaSubtotal}`;
+        formulas[`F${r}`] = `${aba}!${COL_SALDO}${p.linhaSubtotal}`;
       }
       formulas[`G${r}`] = `C${r}+E${r}+F${r}+D${r}`;
     });
@@ -131,7 +163,7 @@
 
   /** Tabela plana (uma linha por despesa) — usada no CSV e no XLSX simples. */
   function montarTabelaPlana(secretarias, filtro = {}) {
-    const cabecalho = ['U.O.', 'Secretaria', ...config.CAMPOS_LINHA.map((c) => c.rotulo), 'Folha (secretaria)', 'Tipo'];
+    const cabecalho = ['U.O.', 'Secretaria', ...CAMPOS_EXPORTACAO.map((c) => c.rotulo), 'Folha (secretaria)', 'Tipo'];
     const aoa = [cabecalho];
     secretarias.forEach((original) => {
       const s = aplicarFiltro(original, filtro);
@@ -175,7 +207,8 @@
     return aba;
   }
 
-  const LARGURAS_ABA = [8, 9, 5, 12, 50, 22, 15, 15, 15, 15, 45];
+  const LARGURA_CAMPO = Object.freeze({ ficha: 8, ue: 9, fonte: 5, despesa: 12, descricao: 50, observacao: 22, anotacao: 45 });
+  const LARGURAS_ABA = CAMPOS_EXPORTACAO.map((c) => LARGURA_CAMPO[c.chave] || 15);
 
   /** Workbook completo no layout original (GERAL + abas por secretaria). */
   function montarWorkbookBase(XLSX, secretarias, atualizadoEm) {
@@ -238,6 +271,6 @@
   }
 
   App.data.exporter = Object.freeze({
-    gerarArquivo, montarWorkbookBase, montarAbaSecretaria, montarAbaGeral, montarTabelaPlana, montarConsolidado, gerarCsv
+    CAMPOS_EXPORTACAO, gerarArquivo, montarWorkbookBase, montarAbaSecretaria, montarAbaGeral, montarTabelaPlana, montarConsolidado, gerarCsv
   });
 })(window.OrcApp);

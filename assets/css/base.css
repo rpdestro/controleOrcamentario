@@ -59,6 +59,15 @@
   --cor-solida-info: #0b4f8a;
   --cor-solida-aviso: #6b4700;
 
+  /* Situação das fichas (v1.5): Déficit = vermelho, Atende = azul, Positivo = verde.
+     "-solida" = fundo do selo com texto branco (igual nos dois temas). */
+  --cor-sit-deficit: #b42318;
+  --cor-sit-atende: #1d5fd1;
+  --cor-sit-positivo: #1b7a3d;
+  --cor-sit-deficit-solida: #b42318;
+  --cor-sit-atende-solida: #1d5fd1;
+  --cor-sit-positivo-solida: #1b7a3d;
+
   /* Layout */
   --largura-nav: 280px;
   --altura-header: 64px;
@@ -91,6 +100,10 @@
 
   --cor-header: #0a2540;
   --cor-tabela-cabecalho: #123b63;
+
+  --cor-sit-deficit: #ff8a80;
+  --cor-sit-atende: #7fb0ff;
+  --cor-sit-positivo: #5fd08a;
 
   --sombra: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.5);
   --sombra-forte: 0 12px 32px rgba(0, 0, 0, 0.6);

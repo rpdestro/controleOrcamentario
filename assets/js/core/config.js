@@ -87,9 +87,35 @@
     fontes: Object.freeze(['1'])
   });
 
+  /**
+   * Situação orçamentária de uma ficha (v1.5: três níveis). Compara o disponível
+   * (Reserva + Saldo Ficha, já com as movimentações) com a necessidade
+   * (soma do Essencial da ficha), com tolerância de TOLERANCIA_CONFERENCIA.
+   * `ordem` = gravidade (0 = mais grave), usada para ordenar e filtrar.
+   */
+  const SITUACOES_FICHA = Object.freeze({
+    deficit:  Object.freeze({ ordem: 0, rotulo: 'Déficit',  icone: '▼', descricao: 'O disponível não cobre o Essencial (inclui fichas zeradas).' }),
+    atende:   Object.freeze({ ordem: 1, rotulo: 'Atende',   icone: '=', descricao: 'O disponível é igual ao Essencial (sem sobra).' }),
+    positivo: Object.freeze({ ordem: 2, rotulo: 'Positivo', icone: '▲', descricao: 'O disponível supera o Essencial.' })
+  });
+
+  /**
+   * Opções oferecidas como caixas de seleção no filtro de reservas
+   * (Configurações e atualização Fiorilli). Outros códigos podem ser digitados.
+   */
+  const PROCESSOS_DISPONIVEIS = Object.freeze(['001.003', '001.003.1', '001.003.2', '001.003.3', '001.005']);
+  const FONTES_DISPONIVEIS = Object.freeze(['1', '2', '3', '5', '8']);
+
+  /** Instrumento legal da movimentação (por ora apenas informativo; o filtro virá depois). */
+  const INSTRUMENTOS_TRANSFERENCIA = Object.freeze([
+    Object.freeze({ valor: '', rotulo: 'A definir' }),
+    Object.freeze({ valor: 'decreto', rotulo: 'Decreto (mais simples e rápido)' }),
+    Object.freeze({ valor: 'lei', rotulo: 'Projeto de Lei (mais demorado)' })
+  ]);
+
   App.core.config = Object.freeze({
     APP_NOME: 'Planejamento e Orçamento',
-    APP_VERSAO: '1.3.0',
+    APP_VERSAO: '1.5.0',
     ORGAO: 'Prefeitura Municipal de Botucatu',
     LOGO: 'assets/img/brasao.png',
     STORAGE_KEY: 'orcamento-botucatu:v1',
@@ -103,6 +129,10 @@
     SECRETARIAS_PADRAO,
     CAMPOS_LINHA,
     CAMPOS_NUMERICOS: Object.freeze(CAMPOS_LINHA.filter((c) => c.tipo === 'moeda').map((c) => c.chave)),
-    MENSAGENS_PARECER
+    MENSAGENS_PARECER,
+    SITUACOES_FICHA,
+    PROCESSOS_DISPONIVEIS,
+    FONTES_DISPONIVEIS,
+    INSTRUMENTOS_TRANSFERENCIA
   });
 })(window.OrcApp);

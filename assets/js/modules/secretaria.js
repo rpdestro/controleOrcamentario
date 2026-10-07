@@ -8,14 +8,23 @@
  *  - incluir, editar e excluir despesas (formulário validado, período padronizado);
  *  - informar o valor da Folha;
  *  - consultar se uma demanda consta na planilha (gera texto de despacho);
- *  - incorporar lançamentos "fora do quadro".
+ *  - incorporar lançamentos "fora do quadro";
+ *  - (v1.4) transferir recursos entre fichas, ver a situação de cada ficha
+ *    e o histórico de movimentações;
+ *  - (v1.5) situação em três níveis (Positivo / Déficit / Atende), com
+ *    botões de filtro e ordenação por situação acima da tabela.
+ *
+ * Os valores exibidos são PROJETADOS (oficial + movimentações); edição e
+ * exclusão de linhas sempre trabalham sobre os dados oficiais.
  */
 (function (App) {
   'use strict';
 
   const { criar, limpar } = App.utils.dom;
-  const { moeda, numero, paraNumero } = App.utils.format;
-  const { kpi, varianteSinal, tabela, cabecalhoPagina, botao, campo, aplicarErros, resumoErros, alerta, estadoVazio } = App.ui.componentes;
+  const { moeda, numero, paraNumero, dataHoraBR } = App.utils.format;
+  const { kpi, varianteSinal, tabela, cabecalhoPagina, botao, campo, aplicarErros, resumoErros, alerta, estadoVazio, seloSituacao } = App.ui.componentes;
+  const mov = App.data.movimentacoes;
+  const animacao = App.ui.animacao;
   const { validarLinha, validarValor } = App.utils.validators;
   const filtroTabela = App.utils.filtroTabela;
   const periodo = App.utils.periodo;
@@ -28,7 +37,7 @@
   /** Filtros preservados por secretaria durante a sessão. */
   const filtros = new Map();
   const obterFiltro = (codigo) => {
-    if (!filtros.has(codigo)) filtros.set(codigo, { busca: '', periodo: '', colunas: filtroTabela.criarEstado() });
+    if (!filtros.has(codigo)) filtros.set(codigo, { busca: '', periodo: '', ordemSituacao: '', colunas: filtroTabela.criarEstado() });
     return filtros.get(codigo);
   };
 
@@ -38,8 +47,26 @@
    * KPIs calculados sobre as linhas VISÍVEIS (após todos os filtros).
    * Com qualquer filtro ativo a Folha não é somada (é um valor global da secretaria).
    */
-  function blocoKpis(secretaria, visiveis, algumFiltro) {
-    const t = calculos.totaisSecretaria({ ...secretaria, linhas: visiveis }, { colunasAtivas: algumFiltro });
+  function totaisVisiveis(secretaria, visiveis, algumFiltro) {
+    return calculos.totaisSecretaria({ ...secretaria, linhas: visiveis }, { colunasAtivas: algumFiltro });
+  }
+
+  /** Fichas (resumos) presentes num conjunto de linhas, sem repetição. */
+  const fichasDasLinhas = (linhas, fichas) => [...new Set(linhas.map((l) => l.ficha))].map((f) => fichas.get(f)).filter(Boolean);
+
+  /** KPI "Fichas em déficit" entre as fichas exibidas (com a contagem das que apenas atendem). */
+  function kpiAlerta(visiveis, fichas) {
+    const exibidas = fichasDasLinhas(visiveis, fichas);
+    const deficit = exibidas.filter((f) => mov.ehGrave(f.situacao)).length;
+    const atende = exibidas.filter((f) => f.situacao === 'atende').length;
+    return kpi({
+      rotulo: 'Fichas em déficit', valor: String(deficit), variante: deficit ? 'negativo' : 'positivo', testid: 'kpi-sec-alerta',
+      dica: `${atende} atende(m) sem sobra · ${exibidas.length - deficit - atende} positiva(s)`
+    });
+  }
+
+  function blocoKpis(secretaria, visiveis, algumFiltro, fichas) {
+    const t = totaisVisiveis(secretaria, visiveis, algumFiltro);
     return criar('section', {
       classe: 'kpis',
       testid: 'secretaria-kpis',
@@ -49,7 +76,8 @@
         kpi({ rotulo: 'Reserva', valor: moeda(t.reserva), variante: 'positivo', testid: 'kpi-sec-reserva' }),
         kpi({ rotulo: 'Saldo Ficha', valor: moeda(t.saldoFicha), variante: 'positivo', testid: 'kpi-sec-saldo' }),
         kpi({ rotulo: 'Folha', valor: moeda(t.folha), variante: 'negativo', testid: 'kpi-sec-folha' }),
-        kpi({ rotulo: 'Resultado', valor: moeda(t.resultado), variante: varianteSinal(t.resultado), testid: 'kpi-sec-resultado', dica: `${t.qtdLinhas} linhas · ${t.qtdFichas} fichas` })
+        kpi({ rotulo: 'Resultado', valor: moeda(t.resultado), variante: varianteSinal(t.resultado), testid: 'kpi-sec-resultado', dica: `${t.qtdLinhas} linhas · ${t.qtdFichas} fichas` }),
+        kpiAlerta(visiveis, fichas)
       ]
     });
   }
@@ -280,14 +308,62 @@
 
   /* --------------------------------- Tabelas --------------------------------- */
 
-  function acoesLinha(secretaria, linha) {
+  /** Abre a transferência com a ficha como origem; ao concluir, devolve o foco ao botão. */
+  function abrirTransferencia(codigo, fichaResumo) {
+    App.modules.transferencia.abrir({
+      origem: { secretaria: codigo, ficha: fichaResumo.ficha },
+      aoConcluir: () => {
+        const alvo = document.querySelector(`[data-testid="btn-transferir-${CSS.escape(fichaResumo.idAncora)}"]`);
+        if (alvo) alvo.focus({ preventScroll: true });
+      }
+    });
+  }
+
+  /**
+   * Ações da linha. `linha` é a projetada (exibida); editar/excluir usam a linha OFICIAL.
+   * "Transferir" aparece só na linha-âncora da ficha (onde ficam Reserva e Saldo).
+   */
+  function acoesLinha(secretaria, linha, fichaResumo) {
+    const oficial = secretaria.linhas.find((l) => l.id === linha.id) || linha;
+    const ancora = fichaResumo && fichaResumo.idAncora === linha.id;
+    const semSaldo = ancora && fichaResumo.saldoFicha <= 0 && fichaResumo.reserva <= 0;
     return criar('div', {
       classe: 'tabela__acoes',
       filhos: [
-        botao({ rotulo: 'Editar', tamanho: 'pequeno', variante: 'fantasma', testid: `btn-editar-linha-${linha.id}`, attrs: { 'aria-label': `Editar ficha ${linha.ficha} ${linha.descricao}` }, aoClicar: () => abrirFormularioLinha(secretaria, linha) }),
-        botao({ rotulo: 'Excluir', tamanho: 'pequeno', variante: 'perigo-texto', testid: `btn-excluir-linha-${linha.id}`, attrs: { 'aria-label': `Excluir ficha ${linha.ficha} ${linha.descricao}` }, aoClicar: () => excluirLinha(secretaria, linha) })
+        botao({ rotulo: 'Editar', tamanho: 'pequeno', variante: 'fantasma', testid: `btn-editar-linha-${linha.id}`, attrs: { 'aria-label': `Editar ficha ${linha.ficha} ${linha.descricao}` }, aoClicar: () => abrirFormularioLinha(secretaria, oficial) }),
+        botao({ rotulo: 'Excluir', tamanho: 'pequeno', variante: 'perigo-texto', testid: `btn-excluir-linha-${linha.id}`, attrs: { 'aria-label': `Excluir ficha ${linha.ficha} ${linha.descricao}` }, aoClicar: () => excluirLinha(secretaria, oficial) }),
+        ancora ? botao({
+          rotulo: 'Transferir', tamanho: 'pequeno', variante: 'secundario', testid: `btn-transferir-${linha.id}`,
+          attrs: {
+            'aria-label': `Transferir recursos da ficha ${linha.ficha}`,
+            title: semSaldo ? 'Ficha sem saldo para transferir' : 'Mover Saldo Ficha e/ou Reserva para outra ficha',
+            disabled: semSaldo || null
+          },
+          aoClicar: () => abrirTransferencia(secretaria.codigo, fichaResumo)
+        }) : null
       ]
     });
+  }
+
+  /**
+   * Célula de Reserva/Saldo: valor projetado (animável) e, se houve
+   * movimentação, o valor oficial e a variação logo abaixo.
+   */
+  function celulaValor(campoValor) {
+    return (linha) => {
+      const valor = criar('span', { classe: 'valor-animavel', texto: moeda(linha[campoValor]), attrs: { 'data-campo': campoValor } });
+      const variacao = linha.movimentado && linha.movimentado[campoValor];
+      if (!variacao) return valor;
+      return criar('span', {
+        filhos: [
+          valor,
+          criar('small', {
+            classe: `tabela__anotacao tabela__variacao valor--${variacao > 0 ? 'positivo' : 'negativo'}`,
+            texto: `${variacao > 0 ? '+' : '−'}${moeda(Math.abs(variacao))} · oficial ${moeda(linha.oficial[campoValor])}`
+          })
+        ]
+      });
+    };
   }
 
   /** Célula de período: destaca textos ainda não padronizados. */
@@ -324,41 +400,240 @@
       valorOrdem: (l) => (periodo.valido(l.periodoInicio) ? `${l.periodoInicio}|${l.periodoFim}` : `~${l.observacao}`)
     },
     { rotulo: 'Essencial', chave: 'essencial', moeda: true, filtravel: true },
-    { rotulo: 'Reserva', chave: 'reserva', moeda: true, filtravel: true },
-    { rotulo: 'Saldo Ficha', chave: 'saldoFicha', moeda: true, filtravel: true }
+    { rotulo: 'Reserva', chave: 'reserva', moeda: true, filtravel: true, render: celulaValor('reserva') },
+    { rotulo: 'Saldo Ficha', chave: 'saldoFicha', moeda: true, filtravel: true, render: celulaValor('saldoFicha') }
   ]);
 
-  /** Alterna a cor de fundo a cada nova ficha (agrupamento visual). */
-  function classificadorFichas(linhas) {
+  /* --------------------------- Filtro por situação ---------------------------- */
+
+  /** Ordem de exibição dos botões de situação (definida pelo usuário: Positivo, Déficit, Atende). */
+  const ORDEM_BOTOES_SITUACAO = Object.freeze(['positivo', 'deficit', 'atende']);
+  const ID_COLUNA_SITUACAO = 'situacao';
+  const rotuloSituacao = (chave) => config.SITUACOES_FICHA[chave].rotulo;
+
+  /**
+   * Opções de ordenação por situação: a escolhida vem primeiro e as demais
+   * seguem a ordem dos botões. '' = ordem original da tabela (por ficha).
+   */
+  const ORDENACOES_SITUACAO = Object.freeze([
+    { valor: '', rotulo: 'Ordem da tabela' },
+    ...ORDEM_BOTOES_SITUACAO.map((s) => ({ valor: s, rotulo: `${rotuloSituacao(s)} primeiro` }))
+  ]);
+
+  /** Sequência de situações para a ordenação escolhida. */
+  const sequenciaSituacao = (primeira) => (primeira
+    ? [primeira, ...ORDEM_BOTOES_SITUACAO.filter((s) => s !== primeira)]
+    : ORDEM_BOTOES_SITUACAO);
+
+  /**
+   * Barra "Situação das fichas": botões alternáveis (com a quantidade de fichas)
+   * e seletor de ordenação. Usa o MESMO estado do filtro de coluna "Situação",
+   * então os dois ficam sempre sincronizados.
+   * @param {Array} base linhas após busca/competência (antes dos filtros de coluna)
+   */
+  function barraSituacao({ filtro, base, fichas, aoAlterar }) {
+    const todos = ORDEM_BOTOES_SITUACAO.map(rotuloSituacao);
+    const marcados = filtro.colunas.selecoes[ID_COLUNA_SITUACAO] || null;
+    const contagem = {};
+    fichasDasLinhas(base, fichas).forEach((f) => { contagem[f.situacao] = (contagem[f.situacao] || 0) + 1; });
+
+    const selecionar = (rotulos) => {
+      const novos = rotulos.length ? rotulos : null;
+      filtro.colunas = filtroTabela.definirSelecao(filtro.colunas, ID_COLUNA_SITUACAO, novos, todos);
+      aoAlterar();
+    };
+    const alternar = (rotulo) => {
+      const atuais = marcados || [];
+      selecionar(atuais.includes(rotulo) ? atuais.filter((r) => r !== rotulo) : todos.filter((r) => r === rotulo || atuais.includes(r)));
+    };
+
+    const botaoFiltro = ({ rotulo, quantidade, ativo, classe, testid, aoClicar }) => {
+      // A barra é redesenhada a cada clique: devolve o foco ao botão equivalente (teclado).
+      const clicar = () => {
+        aoClicar();
+        const novo = document.querySelector(`[data-testid="${testid}"]`);
+        if (novo) novo.focus({ preventScroll: true });
+      };
+      const el = botao({ rotulo: `${rotulo} (${quantidade})`, tamanho: 'pequeno', variante: 'fantasma', testid, attrs: { 'aria-pressed': String(ativo) }, aoClicar: clicar });
+      el.classList.add('filtro-situacao__botao', ...[classe, ativo ? 'filtro-situacao__botao--ativo' : ''].filter(Boolean));
+      return el;
+    };
+
+    // A classificação pode ter sido trocada pelo menu de outra coluna: aí o seletor volta a "Ordem da tabela".
+    const ordemAtiva = filtro.colunas.ordem && filtro.colunas.ordem.coluna === ID_COLUNA_SITUACAO ? filtro.ordemSituacao : '';
+    const ordenar = campo({
+      id: 'sec-ordem-situacao', nome: 'ordemSituacao', rotulo: 'Ordenar por situação', tipo: 'select',
+      valor: ordemAtiva, testid: 'select-secretaria-ordem-situacao', opcoes: ORDENACOES_SITUACAO
+    });
+    ordenar.querySelector('select').addEventListener('change', (e) => {
+      filtro.ordemSituacao = e.target.value;
+      filtro.colunas = filtro.ordemSituacao
+        ? filtroTabela.definirOrdem(filtro.colunas, ID_COLUNA_SITUACAO, 'asc')
+        : { ...filtro.colunas, ordem: null };
+      aoAlterar();
+    });
+
+    const totalFichas = Object.values(contagem).reduce((t, n) => t + n, 0);
+    return criar('div', {
+      classe: 'filtro-situacao',
+      testid: 'secretaria-filtro-situacao',
+      filhos: [
+        criar('div', {
+          classe: 'filtro-situacao__grupo',
+          attrs: { role: 'group', 'aria-label': 'Filtrar fichas por situação' },
+          filhos: [
+            criar('span', { classe: 'form__rotulo', texto: 'Situação das fichas:' }),
+            botaoFiltro({ rotulo: 'Todas', quantidade: totalFichas, ativo: !marcados, classe: '', testid: 'btn-situacao-todas', aoClicar: () => selecionar([]) }),
+            ...ORDEM_BOTOES_SITUACAO.map((s) => botaoFiltro({
+              rotulo: `${config.SITUACOES_FICHA[s].icone} ${rotuloSituacao(s)}`, quantidade: contagem[s] || 0,
+              ativo: Boolean(marcados && marcados.includes(rotuloSituacao(s))), classe: `filtro-situacao__botao--${s}`,
+              testid: `btn-situacao-${s}`, aoClicar: () => alternar(rotuloSituacao(s))
+            }))
+          ]
+        }),
+        ordenar
+      ]
+    });
+  }
+
+  /**
+   * Colunas da tabela principal: base + "Situação" da ficha (filtrável:
+   * permite exibir só as fichas em déficit, por exemplo). O selo aparece na
+   * linha-âncora; todas as linhas da ficha filtram pela mesma situação.
+   * @param {Map} fichas ficha -> resumo (movimentacoes.resumirFichas)
+   * @param {string} [ordemSituacao] situação que vem primeiro na classificação
+   */
+  function colunasLinhas(fichas, ordemSituacao = '') {
+    const situacao = (l) => (fichas.get(l.ficha) || { situacao: 'positivo' }).situacao;
+    const sequencia = sequenciaSituacao(ordemSituacao);
+    return [
+      ...COLUNAS_BASE,
+      {
+        rotulo: 'Situação', id: ID_COLUNA_SITUACAO, filtravel: true, classe: 'tabela__celula--nowrap',
+        valorFiltro: (l) => rotuloSituacao(situacao(l)),
+        valorOrdem: (l) => sequencia.indexOf(situacao(l)),
+        render: (l) => {
+          const f = fichas.get(l.ficha);
+          if (!f || f.idAncora !== l.id) return '';
+          const falta = f.necessidade - f.disponivel;
+          return seloSituacao(f.situacao, { complemento: f.situacao === 'deficit' ? `−${moeda(falta)}` : '', testid: `situacao-ficha-${f.ficha}` });
+        }
+      }
+    ];
+  }
+
+  /**
+   * Classes das linhas: faixa alternada a cada nova ficha (agrupamento visual)
+   * e, na linha-âncora, a borda colorida da situação da ficha.
+   */
+  function classificadorFichas(linhas, fichas) {
     let faixa = false;
     let anterior = null;
     const mapa = new Map();
     linhas.forEach((l) => {
       if (l.ficha !== anterior) { faixa = !faixa; anterior = l.ficha; }
-      mapa.set(l.id, faixa ? 'tabela__linha--faixa' : '');
+      const f = fichas.get(l.ficha);
+      const situacao = f && f.idAncora === l.id ? `tabela__linha--sit-${f.situacao}` : '';
+      mapa.set(l.id, [faixa ? 'tabela__linha--faixa' : '', situacao].filter(Boolean).join(' '));
     });
     return (linha) => mapa.get(linha.id);
   }
 
   /**
    * Tabela de linhas com filtros de coluna (estilo Excel).
+   * @param {Object} oficial  secretaria oficial (para editar/excluir)
+   * @param {Object} projetada secretaria com as movimentações aplicadas (exibida)
    * @param {Array} base     linhas após busca/período (antes dos filtros de coluna)
    * @param {Array} visiveis linhas após todos os filtros
    */
-  function tabelaLinhas(secretaria, filtro, base, visiveis, aoAlterarColunas) {
-    if (!secretaria.linhas.length) {
+  function tabelaLinhas({ oficial, projetada, fichas, colunas: colunasDados, filtro, base, visiveis, aoAlterarColunas }) {
+    if (!projetada.linhas.length) {
       return alerta({ nivel: 'info', testid: 'secretaria-sem-linhas', mensagem: 'Nenhuma despesa cadastrada para esta secretaria.' });
     }
     const soma = calculos.somarLinhas(visiveis);
-    const colunas = [...COLUNAS_BASE, { rotulo: 'Ações', id: 'acoes', render: (l) => acoesLinha(secretaria, l) }];
+    const colunas = [...colunasDados, { rotulo: 'Ações', id: 'acoes', render: (l) => acoesLinha(oficial, l, fichas.get(l.ficha)) }];
     return tabela({
       testid: 'tabela-linhas',
-      legenda: `Despesas da secretaria ${secretaria.codigo} — exibindo ${visiveis.length} de ${secretaria.linhas.length} linhas`,
+      legenda: `Despesas da secretaria ${projetada.codigo} — exibindo ${visiveis.length} de ${projetada.linhas.length} linhas`,
       colunas,
       linhas: visiveis,
-      classeLinha: classificadorFichas(visiveis),
+      classeLinha: classificadorFichas(visiveis, fichas),
+      atributosLinha: (l) => ({ 'data-id': l.id, 'data-ficha': l.ficha }),
       filtro: { estado: filtro.colunas, linhasBase: base, aoAlterar: aoAlterarColunas },
-      rodape: ['', '', '', '', visiveis.length ? 'Totais' : 'Nenhuma linha corresponde aos filtros', '', moeda(soma.essencial), moeda(soma.reserva), moeda(soma.saldoFicha), '']
+      rodape: ['', '', '', '', visiveis.length ? 'Totais' : 'Nenhuma linha corresponde aos filtros', '', moeda(soma.essencial), moeda(soma.reserva), moeda(soma.saldoFicha), '', '']
+    });
+  }
+
+  /* ------------------------------ Movimentações ------------------------------ */
+
+  async function desfazer(t) {
+    const confirmado = await modal.confirmar({
+      titulo: 'Desfazer transferência',
+      mensagem: `Desfazer a transferência de ${App.modules.transferencia.descreverValores(t)} da ficha ${t.origem.ficha} (${t.origem.secretaria}) para a ficha ${t.destino.ficha} (${t.destino.secretaria})?`,
+      rotuloConfirmar: 'Desfazer',
+      perigo: true,
+      testid: 'modal-desfazer-transferencia'
+    });
+    if (!confirmado) return;
+    try {
+      store.desfazerTransferencia(t.id);
+      toast.sucesso('Transferência desfeita.');
+    } catch (erro) {
+      toast.erro(erro.message);
+    }
+  }
+
+  /**
+   * Histórico das movimentações que envolvem a secretaria (como origem ou destino).
+   * Sinaliza lançamentos anteriores à última atualização Fiorilli (podem já estar
+   * refletidos nos saldos oficiais) e lançamentos órfãos (ficha não existe mais).
+   */
+  function secaoMovimentacoes(codigo) {
+    const todas = store.getTransferencias();
+    const lista = todas.filter((t) => t.origem.secretaria === codigo || t.destino.secretaria === codigo).reverse();
+    if (!lista.length) return null;
+    const fiorilli = store.getEstado().meta.fiorilli;
+    const orfas = new Set(mov.listarOrfas(store.getSecretarias(), todas).map((t) => t.id));
+    const instrumento = (valor) => (App.core.config.INSTRUMENTOS_TRANSFERENCIA.find((i) => i.valor === valor) || { rotulo: valor }).rotulo.replace(/ \(.*\)$/, '');
+    const ponto = (p) => `${p.secretaria === codigo ? '' : `${p.secretaria} · `}Ficha ${p.ficha}`;
+    const sinal = (t, c) => (t.origem.secretaria === codigo && t.destino.secretaria !== codigo ? -t[c] : t[c]);
+
+    return criar('section', {
+      classe: 'cartao',
+      testid: 'secretaria-movimentacoes',
+      filhos: [
+        criar('h2', { classe: 'cartao__titulo', texto: `Movimentações registradas (${lista.length})` }),
+        criar('p', { classe: 'cartao__descricao', texto: 'Transferências simuladas sobre os saldos oficiais (Fiorilli/planilha), que não são alterados. "Desfazer" devolve os valores.' }),
+        tabela({
+          testid: 'tabela-movimentacoes',
+          legenda: 'Movimentações da secretaria (mais recentes primeiro)',
+          colunas: [
+            {
+              rotulo: 'Data', render: (t) => criar('span', {
+                filhos: [
+                  dataHoraBR(t.data),
+                  fiorilli && t.data < fiorilli.aplicadoEm ? criar('small', { classe: 'tabela__anotacao', texto: '⚠ anterior à última atualização Fiorilli — verifique se já foi efetivada' }) : null,
+                  orfas.has(t.id) ? criar('small', { classe: 'tabela__anotacao', texto: '⚠ ficha não encontrada na base atual' }) : null
+                ]
+              })
+            },
+            { rotulo: 'Origem', render: (t) => ponto(t.origem) },
+            { rotulo: 'Destino', render: (t) => ponto(t.destino) },
+            { rotulo: 'Saldo Ficha', moeda: true, render: (t) => (t.saldoFicha ? moeda(sinal(t, 'saldoFicha')) : '—') },
+            { rotulo: 'Reserva', moeda: true, render: (t) => (t.reserva ? moeda(sinal(t, 'reserva')) : '—') },
+            { rotulo: 'Instrumento', render: (t) => instrumento(t.instrumento) },
+            { rotulo: 'Motivo', classe: 'tabela__celula--descricao', render: (t) => t.motivo || '—' },
+            {
+              rotulo: 'Ações', render: (t) => botao({
+                rotulo: 'Desfazer', tamanho: 'pequeno', variante: 'perigo-texto', testid: `btn-desfazer-transferencia-${t.id}`,
+                attrs: { 'aria-label': `Desfazer transferência da ficha ${t.origem.ficha} para a ficha ${t.destino.ficha}` },
+                aoClicar: () => desfazer(t)
+              })
+            }
+          ],
+          linhas: lista
+        })
+      ]
     });
   }
 
@@ -406,6 +681,7 @@
       aoClicar: () => {
         filtro.busca = '';
         filtro.periodo = '';
+        filtro.ordemSituacao = '';
         filtro.colunas = filtroTabela.criarEstado();
         busca.querySelector('input').value = '';
         seletorPeriodo.querySelector('select').value = '';
@@ -466,23 +742,42 @@
       ]
     }));
 
-    // Região que muda com os filtros (evita perder o foco do campo de busca).
+    // Região que muda com os filtros e as transferências (evita perder o foco do campo de busca).
     const regiaoDinamica = criar('div', { classe: 'secretaria__dinamica' });
-    const atualizar = () => {
+    let anteriores = null; // { valores: Map(id -> {reserva, saldoFicha}), totais } da última exibição
+
+    /** @param {{animar?:boolean}} [opcoes] animar = destacar fichas cujo saldo mudou */
+    const atualizar = ({ animar = false } = {}) => {
+      const projetada = store.getSecretariaProjetada(codigo) || secretaria;
+      const fichas = new Map(mov.resumirFichas(projetada).map((f) => [f.ficha, f]));
+      const colunas = colunasLinhas(fichas, filtro.ordemSituacao);
       // 1) busca + competência  2) filtros de coluna (Excel) + classificação
-      const base = calculos.filtrarLinhas(secretaria.linhas, filtro);
-      const colunas = [...COLUNAS_BASE];
+      const base = calculos.filtrarLinhas(projetada.linhas, filtro);
       const visiveis = filtroTabela.aplicar(base, colunas, filtro.colunas);
       const algumFiltro = calculos.filtroAtivo(filtro) || filtroTabela.temFiltro(filtro.colunas);
       const aoAlterarColunas = (novoEstado) => { filtro.colunas = novoEstado; atualizar(); };
 
       limpar(regiaoDinamica);
       regiaoDinamica.append(...[
-        avisoNaoPadronizados(secretaria, filtro, atualizar),
-        algumFiltro ? alerta({ nivel: 'info', testid: 'secretaria-filtro-ativo', mensagem: `Filtro ativo: exibindo ${visiveis.length} de ${secretaria.linhas.length} linhas. Os indicadores consideram apenas as linhas exibidas (Folha desconsiderada).` }) : null,
-        blocoKpis(secretaria, visiveis, algumFiltro),
-        criar('section', { classe: 'cartao', filhos: [tabelaLinhas(secretaria, filtro, base, visiveis, aoAlterarColunas)] })
+        avisoNaoPadronizados(projetada, filtro, atualizar),
+        algumFiltro ? alerta({ nivel: 'info', testid: 'secretaria-filtro-ativo', mensagem: `Filtro ativo: exibindo ${visiveis.length} de ${projetada.linhas.length} linhas. Os indicadores consideram apenas as linhas exibidas (Folha desconsiderada).` }) : null,
+        blocoKpis(projetada, visiveis, algumFiltro, fichas),
+        criar('section', {
+          classe: 'cartao',
+          filhos: [
+            projetada.linhas.length ? barraSituacao({ filtro, base, fichas, aoAlterar: atualizar }) : null,
+            tabelaLinhas({ oficial: secretaria, projetada, fichas, colunas, filtro, base, visiveis, aoAlterarColunas })
+          ]
+        }),
+        secaoMovimentacoes(codigo)
       ].filter(Boolean));
+
+      const atuais = {
+        valores: new Map(projetada.linhas.map((l) => [l.id, { reserva: l.reserva, saldoFicha: l.saldoFicha }])),
+        totais: totaisVisiveis(projetada, visiveis, algumFiltro)
+      };
+      if (animar && anteriores) animarMudancas(regiaoDinamica, anteriores, atuais);
+      anteriores = atuais;
     };
 
     container.append(
@@ -492,7 +787,50 @@
     atualizar();
     const pendentes = secaoPendentes(secretaria);
     if (pendentes) container.append(pendentes);
+
+    contexto = { codigo, regiao: regiaoDinamica, atualizar };
   }
 
-  App.modules.secretaria = Object.freeze({ render });
+  /* --------------------------- Atualização reativa ---------------------------- */
+
+  /** Tela de secretaria ativa (para atualizações parciais). */
+  let contexto = null;
+
+  /**
+   * Após uma transferência: conta os valores alterados até o novo saldo e
+   * destaca a linha (verde = entrada, vermelho = saída). Indicadores também contam.
+   */
+  function animarMudancas(regiao, antes, depois) {
+    depois.valores.forEach((novo, id) => {
+      const velho = antes.valores.get(id);
+      if (!velho) return;
+      const variacao = (novo.reserva - velho.reserva) + (novo.saldoFicha - velho.saldoFicha);
+      if (!variacao) return;
+      const linha = regiao.querySelector(`tr[data-id="${CSS.escape(id)}"]`);
+      if (!linha) return; // oculta pelos filtros
+      mov.CAMPOS.forEach((c) => animacao.contar(linha.querySelector(`[data-campo="${c}"]`), velho[c], novo[c], moeda));
+      animacao.destacar(linha, variacao > 0 ? 'tabela__linha--entrada' : 'tabela__linha--saida');
+    });
+    [['reserva', 'kpi-sec-reserva'], ['saldoFicha', 'kpi-sec-saldo'], ['resultado', 'kpi-sec-resultado']].forEach(([campoTotal, testid]) => {
+      const el = regiao.querySelector(`[data-testid="${testid}-valor"]`);
+      if (antes.totais[campoTotal] !== depois.totais[campoTotal]) {
+        animacao.contar(el, antes.totais[campoTotal], depois.totais[campoTotal], moeda);
+        animacao.destacar(el, 'kpi__valor--alterado');
+      }
+    });
+  }
+
+  /**
+   * Chamado pelo roteador a cada 'estado:alterado'. Transferências (e desfazer)
+   * atualizam só a região dinâmica, com animação, sem redesenhar a página.
+   * @returns {boolean} true se a alteração foi tratada aqui
+   */
+  function aoAlterarEstado(evento, params) {
+    if (!String(evento.motivo || '').startsWith('transferencia')) return false;
+    if (!contexto || contexto.codigo !== params.codigo || !contexto.regiao.isConnected) return false;
+    contexto.atualizar({ animar: true });
+    return true;
+  }
+
+  App.modules.secretaria = Object.freeze({ render, aoAlterarEstado });
 })(window.OrcApp);

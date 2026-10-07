@@ -1,4 +1,4 @@
-# Planejamento e Orçamento — Prefeitura Municipal de Botucatu · v1.3
+# Planejamento e Orçamento — Prefeitura Municipal de Botucatu · v1.5
 
 Aplicação web para administrar as **demandas financeiras das Secretarias por período**, usando planilhas Excel como base de dados e o **Sistema Fiorilli** como fonte oficial de saldos.
 
@@ -19,12 +19,12 @@ Aplicação web para administrar as **demandas financeiras das Secretarias por p
 | Módulo | O que faz |
 |---|---|
 | **Painel** | Indicadores gerais, situação da última atualização Fiorilli, gráfico de resultado por secretaria, quadro consolidado (igual à aba GERAL, com filtros de coluna) e essencial por período. |
-| **Secretarias** | Uma tela por Unidade Orçamentária: busca, filtro por competência, **filtros de coluna estilo Excel**, inclusão/edição/exclusão de despesas, Folha, consulta de demanda (texto de despacho) e lançamentos "fora do quadro". |
-| **Relatórios** | Relatório oficial em **duas páginas**, com o brasão da Prefeitura: **Página 1 — Consolidado Geral** e **Página 2 — gráfico "Resultado por secretaria"**. Filtro opcional por competência. Botão **Imprimir / PDF** (A4 paisagem). |
-| **Exportar** | XLSX, XLS ou CSV: base completa, consolidado ou uma secretaria, com filtro de competência. |
-| **Configurações** | Secretarias (incluir, editar, remover), **filtro de reservas** (processos e fontes), **colunas do relatório Fiorilli** e dados locais. |
+| **Secretarias** | Uma tela por Unidade Orçamentária: busca, filtro por competência, **filtros de coluna estilo Excel**, inclusão/edição/exclusão de despesas, Folha, consulta de demanda (texto de despacho), lançamentos "fora do quadro", **situação de cada ficha** (Positivo / Déficit / Atende, com botões de filtro e ordenação) e **transferência de recursos entre fichas** (seção 6-A). |
+| **Relatórios** | Relatório oficial com o brasão da Prefeitura e páginas numeradas. Tipos: **Consolidado Geral** (quadro + gráfico "Resultado por secretaria", filtro por competência), **Gestão de movimentações** (transferências entre fichas e fichas com saldo alterado, filtro por datas e secretaria) ou **Completo**. Botão **Imprimir / PDF** (A4 paisagem). |
+| **Exportar** | XLSX, XLS ou CSV: base completa, consolidado ou uma secretaria, com filtro de competência. A coluna "Antes" (Valor Anterior) não é exportada (v1.5). |
+| **Configurações** | Secretarias (incluir, editar, remover), **filtro de reservas** (processos e fontes em caixas de seleção, com recálculo imediato das Reservas), **colunas do relatório Fiorilli** e dados locais. |
 
-O **brasão da Prefeitura** (`assets/img/brasao.png`), os botões **🌙 Modo escuro** e a **versão (v1.3)** ficam no cabeçalho.
+O **brasão da Prefeitura** (`assets/img/brasao.png`), os botões **🌙 Modo escuro** e a **versão (v1.5)** ficam no cabeçalho.
 
 ---
 
@@ -43,7 +43,7 @@ O **brasão da Prefeitura** (`assets/img/brasao.png`), os botões **🌙 Modo es
 | Essencial | Usuário | Nunca alterado pela integração |
 | Observação (Período) | Usuário, **seleção padronizada** | Ver seção 4 |
 | Anotações | Usuário (novo na v1.1) | Notas livres que antes ficavam misturadas na Observação |
-| Antes, Folha | Planilha / usuário | Nunca alterados pela integração |
+| Antes, Folha | Planilha / usuário | Nunca alterados pela integração. "Antes" não é exportado desde a v1.5 (volta como 0 se a base exportada for reimportada) |
 
 As letras das colunas podem ser alteradas em **Configurações → Integração Fiorilli**, caso o layout do arquivo mude. Processo e Saldo Ficha podem ficar em branco (sem Saldo Ficha, o saldo da planilha é mantido). A pré-visualização mostra, para cada campo, o valor encontrado na 1ª nota do arquivo, para você conferir.
 
@@ -59,11 +59,18 @@ O mesmo relatório exportado em **CSV** (`download-dd-mm-aaaa.csv`) tem outra or
 - **Reserva da ficha = soma do "Saldo da Reserva" (coluna BL) das notas que atendem ao filtro.**
 - Filtro padrão: **processo** (coluna AS) igual a `001.003`, `001.003.1` ou `001.003.3` **e** **Fonte 1**.
 - A comparação do processo é **exata**: `001.003` não inclui `001.003.2`.
-- O filtro é alterado em **Configurações → Filtro de reservas**:
-  - processos e fontes separados por vírgula;
-  - `(vazio)` seleciona as notas **sem** número de processo;
-  - campo vazio = sem restrição.
+- O filtro padrão é alterado em **Configurações → Filtro de reservas** (v1.5: caixas de seleção):
+  - processos `001.003`, `001.003.1`, `001.003.2`, `001.003.3`, `001.005` e fontes `1`, `2`, `3`, `5`, `8`, com "Marcar todos / Desmarcar todos";
+  - campo **Outros** para códigos fora da lista (separados por vírgula); `(vazio)` seleciona as notas **sem** número de processo;
+  - nada marcado = sem restrição.
+- **Na própria atualização Fiorilli** (v1.5) as mesmas caixas aparecem na pré-visualização: ao marcar/desmarcar, a prévia é recalculada na hora. "Salvar esta seleção como filtro padrão" grava a escolha em Configurações.
 - Notas de anulação já vêm com saldo 0, então a soma é o saldo atual.
+
+**Recálculo imediato ao salvar o filtro (v1.5):**
+- Ao aplicar a atualização, o sistema guarda, para cada ficha da base, a **composição** da Reserva: o Saldo da Reserva de **todas** as notas, somado por processo × fonte (poucos KB no navegador).
+- Em Configurações, **Salvar filtro** abre uma **prévia do impacto** (Reserva total atual × após, por secretaria e por ficha) com três opções: **Recalcular reservas**, **Só salvar o filtro** (vale na próxima atualização) ou **Cancelar**.
+- Limites: fichas sem composição (incluídas manualmente, ausentes na última atualização ou base recém-importada da planilha) mantêm a Reserva atual; fichas que não estão na planilha não são incluídas pelo recálculo (use **Atualizar Fiorilli**). Se houver transferências registradas e alguma Reserva projetada ficar negativa, a prévia avisa.
+- Importar uma planilha descarta a composição (a Reserva volta a ser a da planilha).
 
 **Regras aplicadas:**
 - **Fichas que já existem na planilha:** U.E, Fonte, Despesa, Reserva e Saldo são atualizados.
@@ -157,6 +164,53 @@ Dica: para preencher as fichas novas vindas do Fiorilli, filtre a coluna **Descr
 
 ---
 
+## 6-A. Transferências entre fichas e situação orçamentária (v1.4)
+
+### Situação de cada ficha (v1.5: três níveis)
+Cada ficha recebe um selo (ícone + texto) na coluna **Situação** e uma borda colorida na sua 1ª linha. A situação compara o **disponível** (Reserva + Saldo Ficha) com a **necessidade** (soma do Essencial da ficha), com tolerância de R$ 0,01.
+
+| Selo | Cor | Regra |
+|---|---|---|
+| ▲ **Positivo** | verde | disponível **maior** que o Essencial (qualquer sobra; inclui ficha sem Essencial com saldo) |
+| ▼ **Déficit** | vermelho | disponível **menor** que o Essencial, inclusive fichas zeradas (o selo mostra quanto falta) |
+| = **Atende** | azul | disponível **igual** ao Essencial (sem sobra) |
+
+- Acima da tabela, os botões **Todas · Positivo · Déficit · Atende** (com a quantidade de fichas) filtram a tabela; podem ser combinados. Eles usam o mesmo estado do filtro estilo Excel da coluna **Situação**, então os dois ficam sincronizados.
+- **Ordenar por situação**: "Ordem da tabela", "Positivo primeiro", "Déficit primeiro" ou "Atende primeiro" (as demais seguem a ordem Positivo → Déficit → Atende). As linhas de uma ficha continuam juntas.
+- O indicador **Fichas em déficit** conta as fichas em déficit entre as exibidas (e informa quantas atendem e quantas são positivas).
+- As cores ficam em `base.css` (`--cor-sit-*`) e os rótulos em `config.js` (`SITUACOES_FICHA`).
+
+### Transferir recursos
+O botão **Transferir** fica na 1ª linha de cada ficha, onde estão a Reserva e o Saldo. Ele aparece desativado quando a ficha não tem saldo. Na janela:
+- a ficha atual já vem como **Origem**;
+- o **Destino** pode ser qualquer ficha, **da mesma ou de outra secretaria**. A lista é agrupada por secretaria (a da origem primeiro), mostra as fichas mais necessitadas primeiro e tem um campo de busca;
+- informe quanto mover de **Saldo Ficha** e/ou de **Reserva**. O botão "Usar total" preenche o valor disponível;
+- **Instrumento** (A definir / Decreto / Projeto de Lei) e **Motivo** são registrados. Por enquanto o instrumento é só informativo: o filtro por tipo de movimentação virá depois;
+- a **prévia** mostra o antes → depois e a situação da origem e do destino, e é atualizada enquanto você digita;
+- **não é permitido deixar saldo negativo**: cada campo é validado contra o saldo da origem, já descontadas as movimentações anteriores;
+- se a origem passar a ficar em **Déficit**, é preciso marcar uma **confirmação de ciência**.
+
+Depois de confirmar, só a área de dados da tela é atualizada, sem recarregar a página. As linhas alteradas piscam em verde (entrada) ou vermelho (saída), os valores "contam" até o novo saldo e os indicadores acompanham. Com "reduzir movimento" ativado no sistema, as animações são desligadas.
+
+### Livro de movimentações (os saldos oficiais não são alterados)
+- Cada transferência é um **lançamento** guardado no navegador. Os valores oficiais (Fiorilli/planilha) **não são alterados**.
+- As telas (Secretarias, Painel e Relatórios) mostram o saldo **projetado** = oficial − saídas + entradas. Abaixo do valor aparece a variação e o valor oficial (ex.: "+R$ 20.000,00 · oficial R$ 33.034,58").
+- **Salvar base Excel** e **Exportar** gravam os **valores oficiais**.
+- A gravação é "tudo ou nada": se o navegador não conseguir salvar, nada é alterado.
+- **Histórico** (card "Movimentações registradas" na secretaria): mostra data, origem, destino, valores, instrumento e motivo, com o botão **Desfazer**. O sistema não deixa desfazer uma transferência cujo valor já foi repassado adiante: nesse caso, desfaça antes a posterior.
+- Avisos no histórico:
+  - "**anterior à última atualização Fiorilli**": o lançamento pode já estar refletido nos saldos oficiais. Confira e, se for o caso, desfaça-o para não contar duas vezes;
+  - "**ficha não encontrada**": a ficha não existe mais na base atual.
+- No **Painel**, um aviso informa quantas transferências estão registradas e oferece **Descartar todas** (volta aos saldos oficiais).
+
+### Relatório de gestão das movimentações (v1.5)
+Em **Relatórios → Tipo: Gestão de movimentações** (ou **Completo**):
+- **Movimentações entre fichas**: totais movidos (Saldo Ficha, Reserva), resumo por secretaria (lançamentos, entradas, saídas e líquido) e a lista em ordem cronológica (data, origem, destino, valores, instrumento, motivo). Filtros: período (data inicial/final) e secretaria.
+- **Fichas com saldo alterado por movimentações**: Reserva e Saldo Ficha **oficiais**, a variação e o valor **atual**, o Essencial e a situação **antes → depois** (ex.: ▼ Déficit → = Atende). Mostra a posição atual (todas as movimentações).
+- As páginas são numeradas ("Página X de N"); listas longas continuam na folha seguinte ao imprimir.
+
+---
+
 ## 7. Arquitetura
 
 Aplicação 100% front-end, modular e sem build. HTML, CSS e JS ficam separados. O único global é `window.OrcApp`, por isso funciona via `file://`.
@@ -171,7 +225,7 @@ controleOrcamentario/
 │   │   ├── layout.css             cabeçalho, navegação, responsivo
 │   │   ├── components.css         botões, KPIs, tabelas, FILTRO EXCEL, formulários, modal, toast
 │   │   ├── modules.css            gráfico, secretaria, importação, Fiorilli, relatórios
-│   │   └── print.css              impressão (sempre em cores claras; relatório em 2 folhas)
+│   │   └── print.css              impressão (sempre em cores claras; uma folha por página do relatório)
 │   ├── img/brasao.png             brasão da Prefeitura (cabeçalho e relatórios)
 │   └── js/                        // JAVASCRIPT
 │       ├── core/      namespace.js · config.js (versão, colunas Fiorilli) · events.js
@@ -184,18 +238,22 @@ controleOrcamentario/
 │       ├── data/
 │       │   ├── schema.js          modelo + normalizações (U.E, fonte, despesa, anotações)
 │       │   ├── calculos.js        totais, filtros, agrupamentos, consulta, conferência
+│       │   ├── movimentacoes.js   TRANSFERÊNCIAS (v1.4): situação da ficha, projeção, validação, simulação
+│       │   ├── relatorioGestao.js RELATÓRIO DE GESTÃO (v1.5): movimentações, resumo por secretaria, fichas alteradas
 │       │   ├── importer.js        leitura de planilhas (layout por abas / tabela plana / CSV)
 │       │   ├── exporter.js        geração de XLSX/XLS/CSV no layout original
-│       │   ├── fiorilli.js        INTEGRAÇÃO FIORILLI: ler notas + filtro → planejar → aplicar (imutável)
-│       │   ├── store.js           estado + autossalvamento + preferências
+│       │   ├── fiorilli.js        INTEGRAÇÃO FIORILLI: ler notas + filtro → planejar → aplicar (imutável); composição/recálculo da Reserva (v1.5)
+│       │   ├── store.js           estado + autossalvamento + preferências + livro de movimentações
 │       │   └── fileService.js     salvar no mesmo arquivo / download
 │       ├── ui/
 │       │   ├── tema.js            MODO ESCURO (carregado no <head>, sem "piscar")
 │       │   ├── filtroColuna.js    popover do filtro estilo Excel
-│       │   ├── componentes.js · modal.js · toast.js · router.js · nav.js
-│       ├── modules/   painel · secretaria · fiorilli · importar · relatorios · exportar · configuracoes
+│       │   ├── animacao.js        contagem de valores e destaque (respeita "reduzir movimento")
+│       │   ├── seletorFiltroReservas.js  caixas de seleção de processos/fontes (Configurações e Fiorilli)
+│       │   ├── componentes.js · modal.js · toast.js · router.js (atualização parcial) · nav.js
+│       ├── modules/   painel · secretaria · transferencia · fiorilli · importar · relatorios · exportar · configuracoes
 │       └── app.js                 inicialização (exibe a versão)
-└── tests/            index.html · runner/ · specs/ (utils, dados, v11)
+└── tests/            index.html · runner/ · specs/ (utils, dados, v11, v14, v15)
 ```
 
 ---
@@ -209,13 +267,19 @@ controleOrcamentario/
 | Atualizar Fiorilli / arquivo / aplicar | `btn-fiorilli`, `input-fiorilli-arquivo`, `btn-fiorilli-aplicar` |
 | Resumo e opções do Fiorilli | `fiorilli-resumo-*`, `fiorilli-colunas`, `fiorilli-filtro`, `fiorilli-processos`, `fiorilli-incluir-pessoal`, `fiorilli-incluir-zeradas`, `fiorilli-backup` |
 | Detalhes do Fiorilli | `fiorilli-secretarias-tabela`, `fiorilli-alteracoes-tabela`, `fiorilli-inclusoes-tabela`, `fiorilli-ignoradas`, `fiorilli-ausentes-tabela` |
-| Filtro de reservas (v1.2) | `input-filtro-processos`, `input-filtro-fontes`, `btn-salvar-filtro-reservas`, `btn-restaurar-filtro-reservas` |
+| Filtro de reservas (v1.5) | `filtro-reservas-processos`, `filtro-reservas-processos-opcao-<processo>`, `filtro-reservas-processos-outros`, `filtro-reservas-processos-todos` / `-nenhum`, `filtro-reservas-fontes` (mesmo padrão), `btn-salvar-filtro-reservas`, `btn-restaurar-filtro-reservas` |
+| Recálculo das reservas (v1.5) | `modal-recalculo`, `previa-recalculo`, `recalculo-secretarias`, `recalculo-fichas`, `recalculo-negativas`, `btn-recalculo-confirmar`, `btn-recalculo-so-filtro`, `btn-recalculo-cancelar` |
+| Seleção no Fiorilli (v1.5) | `fiorilli-selecao-filtro`, `fiorilli-seletor-processos-*`, `fiorilli-seletor-fontes-*`, `fiorilli-salvar-filtro-padrao` |
+| Filtro por situação (v1.5) | `secretaria-filtro-situacao`, `btn-situacao-todas`, `btn-situacao-positivo`, `btn-situacao-deficit`, `btn-situacao-atende` (`aria-pressed`), `select-secretaria-ordem-situacao` |
+| Relatórios (v1.5) | `select-relatorio-tipo`, `select-relatorio-periodo`, `input-relatorio-inicio`, `input-relatorio-fim`, `select-relatorio-secretaria`, `relatorio-pagina-<n>`, `relatorio-mov-secretarias`, `relatorio-mov-lista`, `relatorio-fichas-alteradas` |
 | Filtro de coluna | `filtro-coluna-<campo>`, `filtro-popover-<campo>`, `filtro-busca-<campo>`, `filtro-todos-<campo>`, `filtro-opcao-<campo>`, `filtro-ok-<campo>`, `filtro-ordem-asc-<campo>`, `filtro-limpar-<campo>`, `btn-limpar-filtros` |
 | Período no formulário | `input-linha-periodoInicio`, `input-linha-periodoFim`, `btn-periodo-ate-dezembro`, `btn-periodo-mes-unico`, `aviso-periodo-legado` |
 | Modo escuro / versão | `btn-tema` (`aria-pressed`), `app-versao`, `rodape-versao` |
 | Colunas do Fiorilli | `input-fiorilli-coluna-<campo>`, `btn-salvar-colunas-fiorilli` |
+| Transferência (v1.4) | `btn-transferir-<idLinha>`, `modal-transferencia`, `transferencia-origem`, `input-transferencia-busca`, `select-transferencia-destino`, `input-transferencia-saldoFicha`, `input-transferencia-reserva`, `btn-transferencia-total-<campo>`, `select-transferencia-instrumento`, `input-transferencia-motivo`, `transferencia-previa`, `check-transferencia-ciente`, `btn-transferencia-confirmar` |
+| Situação e histórico (v1.4) | `situacao-ficha-<ficha>`, `kpi-sec-alerta`, `secretaria-movimentacoes`, `btn-desfazer-transferencia-<id>`, `painel-movimentacoes`, `btn-descartar-transferencias` |
 
-- **Testes:** abra `tests/index.html`. São **101 testes**, todos passando. A v1.1 e a v1.2 acrescentam:
+- **Testes:** abra `tests/index.html`. São **146 testes**, todos passando. A v1.5 acrescenta `v15.spec.js` (exportação sem "Antes" e letras das fórmulas, composição e recálculo da Reserva, relatório de gestão) e atualiza os testes de situação para os três níveis. A v1.4 acrescenta 25 testes: margens de situação, projeção dos saldos, validação (saldo insuficiente, valores, destino), simulação, movimentações órfãs e desfazer encadeado. A v1.1 e a v1.2 acrescentam:
   - padrão de período, com os textos reais da planilha;
   - filtros de coluna;
   - normalizações do Fiorilli;
@@ -252,7 +316,9 @@ Sem a biblioteca, só os arquivos **CSV** funcionam. O relatório de reservas do
 
 | Versão | Data | Mudanças |
 |---|---|---|
-| **v1.3** | 06/10/2026 | A aplicação substitui a planilha do dia a dia ("Planilha Léo Outubro atualizada.xlsx"). **Brasão da Prefeitura** no cabeçalho, no ícone da aba e nos relatórios. **Relatório em duas páginas**: Consolidado Geral + gráfico "Resultado por secretaria" (os demais tipos de relatório e os campos de assinatura foram removidos). Módulo Configurações (colunas do Fiorilli e filtro de reservas) testado com `download-06-10-2026.xls`. |
+| **v1.5** | 07/10/2026 | **Situação das fichas em três níveis**: Positivo (verde), Déficit (vermelho, inclui zeradas e mostra quanto falta) e Atende (azul, disponível = Essencial). **Secretarias**: botões de filtro por situação e ordenação. **Filtro de reservas com caixas de seleção** (processos 001.003, 001.003.1, 001.003.2, 001.003.3, 001.005; fontes 1, 2, 3, 5, 8) em Configurações e na atualização Fiorilli, com **recálculo imediato** das Reservas (composição por processo × fonte guardada na atualização, com prévia do impacto). **Relatório de gestão** das movimentações entre fichas e das fichas com saldo alterado; páginas numeradas dinamicamente. **Exportação sem a coluna "Antes"** (XLS/XLSX) e "Valor Anterior" (CSV); letras das fórmulas derivadas da posição das colunas. |
+| v1.4 | 07/10/2026 | **Transferência de recursos entre fichas** (da mesma ou de outra secretaria), movendo Saldo Ficha e/ou Reserva, com prévia antes → depois, bloqueio de saldo negativo e ciência obrigatória quando a origem fica crítica. **Livro de movimentações**: os saldos oficiais são preservados, as telas mostram o saldo projetado, e o histórico tem Desfazer. **Situação das fichas** (Zerada, Déficit, Crítico < 10%, Atenção < 30%, Regular) com selos, borda colorida, filtro e o indicador "Fichas em alerta". **Atualização parcial e animada** da tela após a transferência. A coluna "Cortes" deixa de ser lida e exportada. |
+| v1.3 | 06/10/2026 | A aplicação substitui a planilha do dia a dia ("Planilha Léo Outubro atualizada.xlsx"). **Brasão da Prefeitura** no cabeçalho, no ícone da aba e nos relatórios. **Relatório em duas páginas**: Consolidado Geral + gráfico "Resultado por secretaria" (os demais tipos de relatório e os campos de assinatura foram removidos). Módulo Configurações (colunas do Fiorilli e filtro de reservas) testado com `download-06-10-2026.xls`. |
 | v1.2 | 06/10/2026 | **Atualizar Fiorilli** passa a usar o **relatório de Notas de Reserva** (`download-dd-mm-aaaa.xls`). A Reserva vira a soma do Saldo da Reserva das notas filtradas por **processo** (coluna AS: 001.003, 001.003.1, 001.003.3) e **Fonte 1**. Novo **Filtro de reservas** em Configurações, editável pelo usuário. Pré-visualização com **Reserva por secretaria** e saldo por processo. As colunas antigas salvas no navegador são migradas automaticamente. |
 | v1.1 | 02/10/2026 | Integração **Fiorilli** (CSV oficial, colunas configuráveis, pré-visualização e cópia de segurança). **Padrão de período** (mês inicial/final) com conversão automática dos textos antigos. Novo campo **Anotações**. **Filtros de coluna estilo Excel**. **Modo escuro**. **Número de versão** na interface. |
 | v1.0 | 02/10/2026 | Versão inicial: importação/exportação XLSX/XLS/CSV, Painel, 21 Secretarias, Relatórios, Exportar, Configurações, conferência de totais e consulta de demanda. |

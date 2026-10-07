@@ -2,7 +2,8 @@
  * @file fiorilli.js (módulo)
  * @description Fluxo "Atualizar com Fiorilli":
  *  1) seleção do relatório de Notas de Reserva (XLS/XLSX, ou CSV com o mesmo layout);
- *  2) pré-visualização: conferência das colunas, filtro de processos/fontes em uso,
+ *  2) pré-visualização: conferência das colunas, seleção dos processos/fontes que
+ *     compõem a Reserva (v1.5: caixas de seleção, recalcula a prévia na hora),
  *     Reserva por secretaria (antes x depois), alterações campo a campo,
  *     fichas novas (com regras de inclusão ajustáveis) e fichas ausentes;
  *  3) cópia de segurança opcional + aplicação.
@@ -70,7 +71,7 @@
     });
   }
 
-  /** Filtro em uso (processos/fontes) — alterável somente em Configurações. */
+  /** Resultado do filtro em uso (processos/fontes selecionados acima). */
   function blocoFiltro(filtro, resumo) {
     const lista = (itens, todos) => (itens.length ? itens.join(', ') : todos);
     const processos = Object.entries(resumo.porProcesso)
@@ -83,7 +84,7 @@
         alerta({
           nivel: 'info',
           mensagem: `Reserva = soma do Saldo da Reserva das notas com processo ${lista(filtro.processos, '(qualquer)')} e fonte ${lista(filtro.fontes, '(qualquer)')}. ` +
-            `${resumo.notasFiltradas} de ${resumo.notas} notas atendem ao filtro. Para mudar a regra, use Configurações → Filtro de reservas.`
+            `${resumo.notasFiltradas} de ${resumo.notas} notas atendem ao filtro. Altere a seleção acima para recalcular a prévia.`
         }),
         processos.length ? tabela({
           testid: 'fiorilli-processos',
@@ -202,7 +203,7 @@
   function abrir() {
     const colunas = store.getColunasFiorilli();
     const filtro = store.getFiltroReservas();
-    const contexto = { colunas, colunasDetectadas: false, registros: [], alertas: [], cabecalho: {}, exemplo: {}, resumo: null, meta: null, opcoes: null, plano: null };
+    const contexto = { matriz: null, colunas, colunasDetectadas: false, registros: [], alertas: [], cabecalho: {}, exemplo: {}, resumo: null, meta: null, opcoes: null, plano: null };
     const descreverColunas = fiorilli.CAMPOS_OFICIAIS.filter((c) => colunas[c]).map((c) => `${fiorilli.ROTULOS[c]}=${colunas[c]}`).join(', ');
 
     const areaPrevia = criar('div', { classe: 'importacao__area-previa', attrs: { 'aria-live': 'polite' } });
@@ -236,7 +237,26 @@
     botaoAplicar.disabled = true;
 
     const regiaoResultado = criar('div', { classe: 'fiorilli__resultado' });
+    const regiaoFiltro = criar('div', { classe: 'fiorilli__regiao-filtro', attrs: { 'aria-live': 'polite' } });
     const backup = criar('input', { testid: 'fiorilli-backup', attrs: { type: 'checkbox', checked: store.temDados() } });
+    const salvarPadrao = criar('input', { testid: 'fiorilli-salvar-filtro-padrao', attrs: { type: 'checkbox' } });
+
+    /**
+     * Relê as notas (já em memória) com a seleção atual de processos/fontes e
+     * atualiza a prévia. Seleção inválida bloqueia a aplicação até ser corrigida.
+     */
+    function refiltrar(bruto) {
+      if (!aplicarErros(formulario, fiorilli.validarFiltro(bruto, contexto.colunas).erros)) {
+        botaoAplicar.disabled = true;
+        return;
+      }
+      const lido = fiorilli.lerRegistros(contexto.matriz, contexto.colunas, bruto);
+      Object.assign(contexto, { registros: lido.registros, alertas: lido.alertas, resumo: lido.resumo, filtro: lido.filtro });
+      contexto.meta.filtro = lido.filtro;
+      limpar(regiaoFiltro).append(blocoFiltro(contexto.filtro, contexto.resumo));
+      recalcular();
+      botaoAplicar.disabled = false;
+    }
 
     /** Recalcula o plano (as opções podem mudar) e atualiza a pré-visualização. */
     function recalcular() {
@@ -248,6 +268,17 @@
     }
 
     function montarPrevia() {
+      let temporizador = null;
+      const seletor = App.ui.seletorFiltroReservas.criar({
+        filtro: contexto.filtro,
+        testid: 'fiorilli-seletor',
+        aoMudar: () => {
+          clearTimeout(temporizador);
+          temporizador = setTimeout(() => refiltrar(seletor.ler()), 250);
+        }
+      });
+      limpar(regiaoFiltro).append(blocoFiltro(contexto.filtro, contexto.resumo));
+
       limpar(areaPrevia).append(
         criar('section', {
           classe: 'importacao__previa',
@@ -259,7 +290,19 @@
               mensagem: 'Layout CSV do Fiorilli reconhecido pelos títulos das colunas (FICHA, CODLO, FONGRUPO, CATEC, PROCESSO, SALDO_RESERVA, SALDO). O mapeamento de Configurações não foi alterado.'
             }) : null,
             conferenciaColunas(contexto.colunas, contexto.cabecalho, contexto.exemplo),
-            blocoFiltro(contexto.filtro, contexto.resumo),
+            criar('section', {
+              classe: 'fiorilli__selecao',
+              testid: 'fiorilli-selecao-filtro',
+              filhos: [
+                criar('h4', { classe: 'importacao__subtitulo', texto: 'Notas que compõem a Reserva' }),
+                criar('div', { classe: 'form form--grade', filhos: [seletor.elemento] }),
+                criar('label', {
+                  classe: 'form__radio',
+                  filhos: [salvarPadrao, criar('span', { texto: 'Salvar esta seleção como filtro padrão (Configurações)' })]
+                })
+              ]
+            }),
+            regiaoFiltro,
             formularioOpcoes(contexto.opcoes, (novas) => { contexto.opcoes = novas; recalcular(); }),
             regiaoResultado,
             contexto.alertas.length ? criar('details', {
@@ -299,6 +342,7 @@
           throw new Error(`Nenhuma ficha encontrada na coluna ${colunas.ficha}. Verifique o arquivo ou o mapeamento de colunas em Configurações.`);
         }
         Object.assign(contexto, lido, {
+          matriz,
           colunas: colunasUsadas,
           colunasDetectadas: Boolean(detectadas),
           meta: {
@@ -331,6 +375,9 @@
           fichasLidas: contexto.plano.totalRegistros,
           atualizadas: contexto.plano.atualizacoes.length,
           incluidas: contexto.plano.inclusoes.length
+        }, {
+          composicoes: fiorilli.composicoesDaBase(novas, contexto.registros),
+          filtroPadrao: salvarPadrao.checked ? contexto.filtro : null
         });
         toast.sucesso(`Fiorilli aplicado: ${contexto.plano.atualizacoes.length} fichas atualizadas e ${contexto.plano.inclusoes.length} incluídas.`);
         if (contexto.plano.inclusoes.length) toast.info('Preencha Descrição, Essencial e Período das fichas novas (filtre a coluna Descrição por "(Vazias)").');
@@ -341,7 +388,8 @@
     }
 
     formulario.elements.arquivo.addEventListener('change', lerArquivo);
-    formulario.addEventListener('submit', (e) => { e.preventDefault(); lerArquivo(); });
+    // Enter no campo "Outros" do filtro não deve reler o arquivo (a prévia já acompanha a seleção).
+    formulario.addEventListener('submit', (e) => { e.preventDefault(); if (!contexto.matriz) lerArquivo(); });
   }
 
   App.modules.fiorilli = Object.freeze({ abrir });

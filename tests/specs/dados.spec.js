@@ -145,7 +145,9 @@
       const { aoa } = exp.montarAbaSecretaria(sec, '02/10/2026');
       const relida = criarSecretaria({ ...imp.lerAbaSecretaria(aoa, '02.07'), codigo: '02.07' }, REF);
       expect(relida.linhas.map((l) => l.periodoFim)).toEqual(sec.linhas.map((l) => l.periodoFim));
-      expect(calc.totaisSecretaria(relida)).toEqual(calc.totaisSecretaria(sec));
+      // "Antes" não é exportado (v1.5): os demais totais são preservados.
+      expect({ ...calc.totaisSecretaria(relida), antes: 0 }).toEqual({ ...calc.totaisSecretaria(sec), antes: 0 });
+      expect(relida.linhas.every((l) => l.antes === 0)).toBe(true);
       expect(relida.pendentes.length).toBe(1);
     });
     it('tabela plana é reimportada', () => {

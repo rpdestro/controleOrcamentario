@@ -265,7 +265,150 @@
   text-align: right;
 }
 
+/* ---------- Secretaria: filtro por situação das fichas (v1.5) ---------- */
+.filtro-situacao {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--esp-3);
+  margin-bottom: var(--esp-3);
+}
+
+.filtro-situacao__grupo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--esp-2);
+}
+
+.filtro-situacao__grupo .form__rotulo {
+  margin: 0;
+}
+
+.filtro-situacao .form__campo {
+  min-width: 200px;
+  margin: 0;
+}
+
+.filtro-situacao__botao {
+  border-left: 4px solid var(--cor-borda);
+}
+
+.filtro-situacao__botao--positivo { border-left-color: var(--cor-sit-positivo); }
+.filtro-situacao__botao--deficit { border-left-color: var(--cor-sit-deficit); }
+.filtro-situacao__botao--atende { border-left-color: var(--cor-sit-atende); }
+
+.filtro-situacao__botao--ativo {
+  background: var(--cor-primaria);
+  border-color: var(--cor-primaria);
+  color: #fff;
+}
+
+.filtro-situacao__botao--ativo.filtro-situacao__botao--positivo { background: var(--cor-sit-positivo-solida); border-color: var(--cor-sit-positivo-solida); }
+.filtro-situacao__botao--ativo.filtro-situacao__botao--deficit { background: var(--cor-sit-deficit-solida); border-color: var(--cor-sit-deficit-solida); }
+.filtro-situacao__botao--ativo.filtro-situacao__botao--atende { background: var(--cor-sit-atende-solida); border-color: var(--cor-sit-atende-solida); }
+
+/* ---------- Transferência entre fichas (v1.4) ---------- */
+.transferencia__origem {
+  padding: var(--esp-3) var(--esp-4);
+  border: 1px solid var(--cor-borda);
+  border-left: 4px solid var(--cor-positivo);
+  border-radius: var(--raio);
+  background: var(--cor-superficie-alt);
+}
+
+.transferencia__origem--deficit { border-left-color: var(--cor-sit-deficit); }
+.transferencia__origem--atende { border-left-color: var(--cor-sit-atende); }
+.transferencia__origem--positivo { border-left-color: var(--cor-sit-positivo); }
+
+.transferencia__rotulo {
+  margin: 0;
+  color: var(--cor-texto-suave);
+  font-size: var(--tam-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.transferencia__ficha {
+  margin: var(--esp-1) 0 var(--esp-2);
+  font-weight: 600;
+}
+
+.transferencia__valores {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--esp-2) var(--esp-4);
+  margin: 0;
+}
+
+.transferencia__valores dt {
+  color: var(--cor-texto-suave);
+  font-size: var(--tam-xs);
+}
+
+.transferencia__valores dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.transferencia .form__campo .btn--pequeno {
+  align-self: flex-start;
+  justify-self: start;
+  margin-top: var(--esp-1);
+}
+
+.transferencia__area-previa {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-3);
+}
+
+.transferencia__previa {
+  width: 100%;
+}
+
+.transferencia__previa th,
+.transferencia__previa td {
+  padding: var(--esp-2) var(--esp-3);
+  border-bottom: 1px solid var(--cor-borda);
+  text-align: left;
+}
+
+.transferencia__previa thead th {
+  background: var(--cor-tabela-cabecalho);
+  color: var(--cor-tabela-cabecalho-texto);
+}
+
+.transferencia__mudanca {
+  white-space: nowrap;
+}
+
+.transferencia__antes {
+  color: var(--cor-texto-suave);
+  text-decoration: line-through;
+}
+
+.transferencia__check {
+  display: flex;
+  gap: var(--esp-2);
+  align-items: center;
+  font-weight: 600;
+  color: var(--cor-aviso);
+}
+
+.transferencia__check input {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
 @media (max-width: 600px) {
+  .transferencia__mudanca {
+    white-space: normal;
+  }
+
   .grafico__item {
     grid-template-columns: 1fr;
     gap: var(--esp-1);

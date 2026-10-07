@@ -324,6 +324,31 @@ details[open] > summary.cartao__titulo {
   color: var(--cor-aviso);
 }
 
+/* Situação orçamentária da ficha (v1.5): ícone + texto, não só cor.
+   Vermelho = Déficit · Azul = Atende · Verde = Positivo */
+.selo--deficit,
+.selo--atende,
+.selo--positivo {
+  color: #fff;
+}
+
+.selo--deficit { background: var(--cor-sit-deficit-solida); }
+.selo--atende { background: var(--cor-sit-atende-solida); }
+.selo--positivo { background: var(--cor-sit-positivo-solida); }
+
+/* Somente leitores de tela */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .tabela__celula {
   padding: var(--esp-2) var(--esp-3);
   border-bottom: 1px solid var(--cor-borda);
@@ -351,6 +376,49 @@ details[open] > summary.cartao__titulo {
 
 .tabela__linha--faixa {
   background: var(--cor-superficie-alt);
+}
+
+/* Borda lateral da situação na linha-âncora da ficha (v1.4) */
+.tabela__linha--sit-deficit > .tabela__celula:first-child { box-shadow: inset 4px 0 0 var(--cor-sit-deficit); }
+.tabela__linha--sit-atende > .tabela__celula:first-child { box-shadow: inset 4px 0 0 var(--cor-sit-atende); }
+.tabela__linha--sit-positivo > .tabela__celula:first-child { box-shadow: inset 4px 0 0 var(--cor-sit-positivo); }
+
+/* Variação de uma transferência abaixo do valor (ex.: "+R$ 500,00 · oficial R$ 1.000,00") */
+.tabela__variacao {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Destaque temporário após uma transferência (verde = entrada, vermelho = saída) */
+.tabela__linha--entrada { animation: linha-entrada 1.6s ease-out; }
+.tabela__linha--saida { animation: linha-saida 1.6s ease-out; }
+
+/* Sem fundo no 100%: a cor volta suavemente ao fundo normal da linha (faixa ou não). */
+@keyframes linha-entrada {
+  0%, 25% { background-color: var(--cor-positivo-fundo); outline: 2px solid var(--cor-positivo); }
+  100% { outline: 2px solid transparent; }
+}
+
+@keyframes linha-saida {
+  0%, 25% { background-color: var(--cor-negativo-fundo); outline: 2px solid var(--cor-negativo); }
+  100% { outline: 2px solid transparent; }
+}
+
+.valor-animavel {
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi__valor--alterado { animation: kpi-alterado 1.2s ease-out; }
+
+@keyframes kpi-alterado {
+  0%, 30% { color: var(--cor-primaria); transform: scale(1.04); }
+  100% { transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tabela__linha--entrada,
+  .tabela__linha--saida,
+  .kpi__valor--alterado { animation: none; }
 }
 
 .tabela__total {
@@ -460,6 +528,41 @@ details[open] > summary.cartao__titulo {
   gap: var(--esp-2);
   font-size: var(--tam-sm);
   cursor: pointer;
+}
+
+/* Seletor do filtro de reservas (v1.5): processos e fontes em caixas de seleção */
+.seletor-filtro__grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--esp-4);
+}
+
+.seletor-filtro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-2);
+  padding: var(--esp-3);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  background: var(--cor-superficie-alt);
+}
+
+.seletor-filtro > legend {
+  padding: 0 var(--esp-1);
+}
+
+.seletor-filtro__opcoes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: var(--esp-2) var(--esp-3);
+}
+
+.seletor-filtro .form__campo {
+  margin: 0;
+}
+
+.seletor-filtro__resumo {
+  font-weight: 600;
 }
 
 .barra-ferramentas {

@@ -45,6 +45,35 @@
     });
   }
 
+  /** Aviso de movimentações registradas, com opção de descartá-las (volta aos saldos oficiais). */
+  function blocoMovimentacoes(transferencias) {
+    if (!transferencias.length) return null;
+    const descartar = async () => {
+      const confirmado = await App.ui.modal.confirmar({
+        titulo: 'Descartar movimentações',
+        mensagem: `Descartar as ${transferencias.length} transferência(s) registrada(s)? Os saldos voltam aos valores oficiais (Fiorilli/planilha).`,
+        rotuloConfirmar: 'Descartar todas',
+        perigo: true,
+        testid: 'modal-descartar-transferencias'
+      });
+      if (!confirmado) return;
+      try {
+        store.limparTransferencias();
+        App.ui.toast.sucesso('Movimentações descartadas.');
+      } catch (erro) {
+        App.ui.toast.erro(erro.message);
+      }
+    };
+    return alerta({
+      nivel: 'info',
+      testid: 'painel-movimentacoes',
+      filhos: [
+        `${transferencias.length} transferência(s) entre fichas registrada(s): os totais abaixo já as consideram. Os saldos oficiais não foram alterados. `,
+        botao({ rotulo: 'Descartar todas', tamanho: 'pequeno', variante: 'perigo-texto', testid: 'btn-descartar-transferencias', aoClicar: descartar })
+      ]
+    });
+  }
+
   function blocoKpis(geral) {
     return criar('section', {
       classe: 'kpis',
@@ -180,18 +209,21 @@
       return;
     }
 
-    const periodos = calculos.listarPeriodos(estado.secretarias);
+    // v1.4: totais com as transferências registradas (saldos oficiais preservados).
+    const secretarias = store.getSecretariasProjetadas();
+    const periodos = calculos.listarPeriodos(secretarias);
     if (filtro.periodo && !periodos.some((p) => p.valor === filtro.periodo)) filtro.periodo = '';
-    const { geral, porSecretaria } = calculos.totaisGerais(estado.secretarias, filtro);
-    const naoPadronizados = calculos.contarNaoPadronizados(estado.secretarias);
+    const { geral, porSecretaria } = calculos.totaisGerais(secretarias, filtro);
+    const naoPadronizados = calculos.contarNaoPadronizados(secretarias);
 
     container.append(...[
       blocoFiorilli(meta.fiorilli),
+      blocoMovimentacoes(store.getTransferencias()),
       filtroPeriodo(periodos),
       filtro.periodo ? alerta({ nivel: 'info', mensagem: `Exibindo: ${periodo.rotuloFiltro(filtro.periodo)}. A Folha não é considerada.`, testid: 'painel-filtro-ativo' }) : null,
       naoPadronizados ? alerta({ nivel: 'aviso', testid: 'painel-periodos-nao-padronizados', mensagem: `${naoPadronizados} linha(s) com período em texto livre (não padronizado). Revise nas telas das secretarias (filtro "⚠ Não padronizado").` }) : null,
       blocoKpis(geral),
-      criar('div', { classe: 'grade-2', filhos: [graficoResultado(porSecretaria), quadroPeriodos(estado.secretarias)] }),
+      criar('div', { classe: 'grade-2', filhos: [graficoResultado(porSecretaria), quadroPeriodos(secretarias)] }),
       quadroConsolidado(porSecretaria),
       blocoAlertas(estado.alertas || [])
     ].filter(Boolean));

@@ -66,7 +66,14 @@
   function iniciar(elementoContainer) {
     container = elementoContainer;
     window.addEventListener('hashchange', () => renderizar());
-    App.core.events.on('estado:alterado', () => renderizar({ manterFoco: true }));
+    // Atualização parcial: o módulo ativo pode tratar a alteração sozinho
+    // (ex.: secretaria anima só as fichas movimentadas); senão, redesenha a tela.
+    App.core.events.on('estado:alterado', (evento) => {
+      const rota = resolver();
+      const modulo = rota && App.modules[rota.modulo];
+      if (modulo && typeof modulo.aoAlterarEstado === 'function' && modulo.aoAlterarEstado(evento, rota.params)) return;
+      renderizar({ manterFoco: true });
+    });
     renderizar();
   }
 
