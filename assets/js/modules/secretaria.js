@@ -21,7 +21,7 @@
   'use strict';
 
   const { criar, limpar } = App.utils.dom;
-  const { moeda, numero, paraNumero, dataHoraBR } = App.utils.format;
+  const { moeda, numero, paraNumero, dataHoraBR, arredondar } = App.utils.format;
   const { kpi, varianteSinal, tabela, cabecalhoPagina, botao, campo, aplicarErros, resumoErros, alerta, estadoVazio, seloSituacao } = App.ui.componentes;
   const mov = App.data.movimentacoes;
   const animacao = App.ui.animacao;
@@ -509,6 +509,17 @@
     return [
       ...COLUNAS_BASE,
       {
+        // Informativo: (Saldo Ficha + Reserva) − Essencial da ficha, na linha-âncora.
+        // Não entra nos totais, indicadores nem na Folha.
+        rotulo: 'Saldo Total', id: 'saldoTotal', moeda: true,
+        render: (l) => {
+          const f = fichas.get(l.ficha);
+          if (!f || f.idAncora !== l.id) return '';
+          const total = arredondar(f.disponivel - f.necessidade);
+          return criar('span', { classe: `valor valor--${varianteSinal(total)}`, texto: moeda(total), testid: `saldo-total-ficha-${f.ficha}` });
+        }
+      },
+      {
         rotulo: 'Situação', id: ID_COLUNA_SITUACAO, filtravel: true, classe: 'tabela__celula--nowrap',
         valorFiltro: (l) => rotuloSituacao(situacao(l)),
         valorOrdem: (l) => sequencia.indexOf(situacao(l)),
@@ -560,7 +571,7 @@
       classeLinha: classificadorFichas(visiveis, fichas),
       atributosLinha: (l) => ({ 'data-id': l.id, 'data-ficha': l.ficha }),
       filtro: { estado: filtro.colunas, linhasBase: base, aoAlterar: aoAlterarColunas },
-      rodape: ['', '', '', '', visiveis.length ? 'Totais' : 'Nenhuma linha corresponde aos filtros', '', moeda(soma.essencial), moeda(soma.reserva), moeda(soma.saldoFicha), '', '']
+      rodape: ['', '', '', '', visiveis.length ? 'Totais' : 'Nenhuma linha corresponde aos filtros', '', moeda(soma.essencial), moeda(soma.reserva), moeda(soma.saldoFicha), '', '', '']
     });
   }
 

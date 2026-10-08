@@ -157,6 +157,7 @@ Dica: para preencher as fichas novas vindas do Fiorilli, filtre a coluna **Descr
 - **Resultado = Reserva + Saldo Ficha − Essencial − Folha**, a mesma fórmula da aba GERAL.
 - A coluna "Cortes" da planilha é **ignorada**: não é lida na importação nem aparece no Painel, nos relatórios, nos gráficos ou nas exportações (XLSX, XLS, CSV).
 - Com qualquer filtro ativo, a Folha não é somada, porque é um valor global da secretaria.
+- **Saldo Total** (coluna da tela da Secretaria, após Saldo Ficha) = **(Saldo Ficha + Reserva) − Essencial da ficha**. Aparece só na 1ª linha de cada ficha, já com as movimentações. É **apenas informativo**: não entra nos totais do rodapé, nos indicadores, na Folha nem no Resultado.
 - **Conferência na importação:** o sistema compara os totais calculados com o SUBTOTAL e com a aba GERAL. Na planilha de outubro ele apontou:
   - `GERAL!E18` usa a Folha da 02.09 para o Fundo 02.10, que está com a Folha em branco. A diferença no TOTAL é de R$ 2,5 mi.
   - `02.35!A3` contém "202" no lugar do título "Ficha".
