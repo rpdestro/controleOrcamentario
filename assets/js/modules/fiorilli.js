@@ -199,6 +199,22 @@
     ];
   }
 
+  /** Aviso quando o relatório do Fiorilli é mais antigo que a planilha ou que o relatório já aplicado. */
+  function avisoDatas(dataSaldos) {
+    const { compararDatasBR } = App.utils.format;
+    const planilha = store.getEstado().meta.atualizadoEm;
+    const aplicado = store.getInfoFiorilli();
+    const avisos = [];
+    if (compararDatasBR(dataSaldos, planilha) < 0) avisos.push(`a planilha está atualizada em ${planilha}`);
+    if (aplicado && compararDatasBR(dataSaldos, aplicado.dataSaldos) < 0) avisos.push(`os saldos em uso são de ${aplicado.dataSaldos}`);
+    if (!avisos.length) return null;
+    return alerta({
+      nivel: 'aviso',
+      testid: 'fiorilli-aviso-data',
+      mensagem: `Este relatório é de ${dataSaldos}, mas ${avisos.join(' e ')}. Confira se é o arquivo mais recente do Fiorilli.`
+    });
+  }
+
   /** Abre o fluxo de atualização. */
   function abrir() {
     const colunas = store.getColunasFiorilli();
@@ -216,7 +232,7 @@
         campo({
           id: 'fiorilli-arquivo', nome: 'arquivo', rotulo: 'Relatório de reservas do Fiorilli (Notas de Reserva)', tipo: 'file', obrigatorio: true,
           testid: 'input-fiorilli-arquivo',
-          dica: `Ex.: download-15-09-2026.xls · Colunas: ${descreverColunas} (altere em Configurações).`,
+          dica: `Ex.: download-17-10-2026.xls · Colunas: ${descreverColunas}.`,
           attrs: { accept: '.csv,.xlsx,.xls' }
         }),
         areaPrevia
@@ -285,6 +301,7 @@
           testid: 'fiorilli-previa',
           filhos: [
             criar('h3', { classe: 'importacao__subtitulo', texto: 'Pré-visualização' }),
+            avisoDatas(contexto.meta.dataSaldos),
             contexto.colunasDetectadas ? alerta({
               nivel: 'info',
               mensagem: 'Layout CSV do Fiorilli reconhecido pelos títulos das colunas (FICHA, CODLO, FONGRUPO, CATEC, PROCESSO, SALDO_RESERVA, SALDO). O mapeamento de Configurações não foi alterado.'
@@ -369,16 +386,21 @@
           });
           App.data.fileService.baixar(blob, `backup-antes-fiorilli-${slug(dataBR(new Date()))}.xlsx`);
         }
-        const novas = fiorilli.aplicar(store.getSecretarias(), contexto.registros, contexto.plano);
-        store.aplicarFiorilli(novas, {
-          ...contexto.meta,
-          fichasLidas: contexto.plano.totalRegistros,
-          atualizadas: contexto.plano.atualizacoes.length,
-          incluidas: contexto.plano.inclusoes.length
-        }, {
-          composicoes: fiorilli.composicoesDaBase(novas, contexto.registros),
-          filtroPadrao: salvarPadrao.checked ? contexto.filtro : null
+        // v1.6: grava só a camada Fiorilli; a planilha não é alterada (ver data/fiorilli.js → combinar).
+        // Fichas incluídas em atualizações anteriores continuam incluídas.
+        const anterior = store.getCamadaFiorilli();
+        const camada = fiorilli.criarCamada({
+          registros: contexto.registros,
+          filtro: contexto.filtro,
+          incluidas: [...(anterior ? anterior.incluidas : []), ...contexto.plano.inclusoes.map((i) => i.registro.ficha)],
+          meta: {
+            ...contexto.meta,
+            fichasLidas: contexto.plano.totalRegistros,
+            atualizadas: contexto.plano.atualizacoes.length,
+            incluidas: contexto.plano.inclusoes.length
+          }
         });
+        store.aplicarFiorilli(camada, { filtroPadrao: salvarPadrao.checked ? contexto.filtro : null });
         toast.sucesso(`Fiorilli aplicado: ${contexto.plano.atualizacoes.length} fichas atualizadas e ${contexto.plano.inclusoes.length} incluídas.`);
         if (contexto.plano.inclusoes.length) toast.info('Preencha Descrição, Essencial e Período das fichas novas (filtre a coluna Descrição por "(Vazias)").');
         fechar();

@@ -115,14 +115,15 @@
 
   App.core.config = Object.freeze({
     APP_NOME: 'Planejamento e Orçamento',
-    APP_VERSAO: '1.5.0',
+    APP_VERSAO: '1.6.0',
     ORGAO: 'Prefeitura Municipal de Botucatu',
     LOGO: 'assets/img/brasao.png',
     STORAGE_KEY: 'orcamento-botucatu:v1',
     TEMA_STORAGE_KEY: 'orcamento-botucatu:tema',
     FIORILLI_COLUNAS_PADRAO,
     FILTRO_RESERVAS_PADRAO,
-    VERSAO_DADOS: 1,
+    // 2 (v1.6): planilha e Fiorilli em camadas separadas (dados da versão 1 são migrados ao carregar).
+    VERSAO_DADOS: 2,
     PADRAO_CODIGO_SECRETARIA: /^\d{2}\.\d{2}$/,
     TOLERANCIA_CONFERENCIA: 0.01,
     EXTENSOES_ACEITAS: Object.freeze(['xlsx', 'xls', 'csv']),

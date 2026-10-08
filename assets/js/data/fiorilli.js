@@ -16,12 +16,16 @@
  *
  * v1.5: cada ficha guarda também a COMPOSIÇÃO da Reserva (todas as notas,
  * somadas por processo × fonte), para recalcular a Reserva quando o filtro
- * muda em Configurações, sem reler o arquivo (planejarRecalculo/aplicarRecalculo).
+ * muda em Configurações, sem reler o arquivo.
  *
- * Fluxo em 3 etapas puras (testáveis):
- *   1. lerRegistros(matriz, colunas, filtro) -> fichas (notas agregadas)
- *   2. planejar(secretarias, registros, op)  -> o que será atualizado/incluído (pré-visualização)
- *   3. aplicar(secretarias, registros, plano) -> novas secretarias (sem alterar as originais)
+ * v1.6: o relatório vira uma CAMADA separada da planilha (ver combinar):
+ * a ordem "Importar planilha" / "Atualizar Fiorilli" não altera o resultado.
+ *
+ * Fluxo em etapas puras (testáveis):
+ *   1. lerRegistros(matriz, colunas, filtro)       -> fichas (notas agregadas)
+ *   2. planejar(secretarias, registros, op)        -> o que muda / fichas novas (pré-visualização)
+ *   3. criarCamada({ registros, filtro, incluidas }) -> camada Fiorilli (guardada no navegador)
+ *   4. combinar(planilha, camada)                  -> base exibida (sem alterar as entradas)
  *
  * Chave de ligação: Nº da FICHA. A secretaria de uma ficha nova é definida
  * pelos 4 primeiros dígitos da U.E (020101 -> 02.01).
@@ -170,28 +174,149 @@
     return { processos: [...processos].sort(ordenar), fontes: [...fontes].sort(ordenar) };
   }
 
+  /* ------------------ Camada Fiorilli e base combinada (v1.6) ------------------ */
+
   /**
-   * Plano de recálculo da Reserva com um novo filtro (nada é alterado aqui).
-   * Somente fichas com composição registrada (vindas de uma atualização Fiorilli)
-   * são recalculadas; as demais mantêm a Reserva atual.
-   * @param {Array} secretarias base OFICIAL (sem movimentações)
-   * @param {Object} composicoes ficha -> composição
-   * @param {Object} filtro { processos, fontes }
+   * v1.6: a planilha e o Fiorilli ficam em CAMADAS separadas e a base exibida é a
+   * combinação das duas (função pura `combinar`):
+   *   - planilha → campos do usuário + valores oficiais da planilha (valem para as
+   *     fichas que não estão no relatório do Fiorilli);
+   *   - Fiorilli → último relatório aplicado, por ficha.
+   * "Importar planilha" troca só a planilha e "Atualizar Fiorilli" troca só a camada
+   * Fiorilli. O resultado é o mesmo em qualquer ordem de carregamento.
+   *
+   * Camada {
+   *   meta: { arquivo, dataSaldos, aplicadoEm, ... },
+   *   filtro: { processos, fontes },            // filtro EM VIGOR da Reserva
+   *   fichas: { [ficha]: { ue, fonte, despesa, saldoFicha (null = não informado), composicao } },
+   *   incluidas: [ficha]                        // fichas novas aceitas na pré-visualização
+   * }
    */
-  function planejarRecalculo(secretarias, composicoes, filtro) {
-    const plano = { alteracoes: [], semComposicao: 0, recalculaveis: 0, porSecretaria: [], totalAntes: 0, totalDepois: 0 };
-    secretarias.forEach((s) => {
-      const vistas = new Map(); // ficha -> soma atual da Reserva
-      s.linhas.forEach((l) => vistas.set(l.ficha, arredondar((vistas.get(l.ficha) || 0) + (Number(l.reserva) || 0))));
+
+  /** Id fixo da linha de uma ficha incluída pelo Fiorilli (estável entre recombinações). */
+  const idLinhaIncluida = (ficha) => `fiorilli-${ficha}`;
+
+  /** Monta a camada a partir dos registros lidos (saída de lerRegistros). */
+  function criarCamada({ registros, meta = {}, filtro = {}, incluidas = [] }) {
+    const fichas = {};
+    registros.forEach((r) => {
+      fichas[r.ficha] = {
+        ue: r.ue, fonte: r.fonte, despesa: r.despesa,
+        saldoFicha: temSaldoFicha(r) ? r.saldoFicha : null,
+        composicao: r.composicao || {}
+      };
+    });
+    return {
+      meta: { ...meta },
+      filtro: normalizarFiltro(filtro),
+      fichas,
+      incluidas: listaDeTexto(incluidas).filter((f) => fichas[f])
+    };
+  }
+
+  /** Camada lida do navegador: garante a estrutura mínima (ou null se inválida). */
+  function normalizarCamada(camada) {
+    if (!camada || typeof camada !== 'object' || !camada.fichas || typeof camada.fichas !== 'object') return null;
+    return {
+      meta: { ...(camada.meta || {}) },
+      filtro: normalizarFiltro(camada.filtro),
+      fichas: camada.fichas,
+      incluidas: listaDeTexto(camada.incluidas || []).filter((f) => camada.fichas[f])
+    };
+  }
+
+  /** Valores oficiais de uma ficha na camada (Reserva pelo filtro em vigor), ou null. */
+  function valoresOficiais(camada, ficha) {
+    const f = camada && camada.fichas[ficha];
+    if (!f) return null;
+    return { ue: f.ue, fonte: f.fonte, despesa: f.despesa, reserva: reservaPorFiltro(f.composicao, camada.filtro), saldoFicha: f.saldoFicha };
+  }
+
+  /** Insere a linha mantendo a ordem aproximada por número de ficha. */
+  function inserirPorFicha(linhas, linha) {
+    const posicao = linhas.findIndex((l) => Number(l.ficha) > Number(linha.ficha));
+    if (posicao < 0) linhas.push(linha);
+    else linhas.splice(posicao, 0, linha);
+  }
+
+  /**
+   * Base exibida = planilha + camada Fiorilli. Não altera as entradas.
+   *  - Ficha no relatório: U.E, Fonte e Despesa em todas as linhas; Reserva e Saldo Ficha
+   *    na 1ª linha da ficha e 0 nas demais (a soma continua igual ao SUBTOTAL do Excel).
+   *    Sem Saldo Ficha no relatório, vale o da planilha.
+   *  - Ficha fora do relatório: valores da planilha.
+   *  - Fichas incluídas pelo Fiorilli que não estão na planilha entram como linhas novas.
+   * Cada linha recebe `origem` ('fiorilli' | 'planilha'), de onde vêm Reserva e Saldo.
+   * @param {Array} secretarias camada da planilha
+   * @param {Object|null} camada camada Fiorilli
+   */
+  function combinar(secretarias, camada) {
+    const naPlanilha = new Set();
+    const combinadas = secretarias.map((s) => {
+      const vistas = new Set();
+      const linhas = s.linhas.map((l) => {
+        naPlanilha.add(l.ficha);
+        const oficial = valoresOficiais(camada, l.ficha);
+        if (!oficial) return { ...l, origem: 'planilha' };
+        const primeira = !vistas.has(l.ficha);
+        vistas.add(l.ficha);
+        return {
+          ...l,
+          ue: oficial.ue,
+          fonte: oficial.fonte,
+          despesa: oficial.despesa,
+          reserva: primeira ? oficial.reserva : 0,
+          saldoFicha: oficial.saldoFicha === null ? l.saldoFicha : (primeira ? oficial.saldoFicha : 0),
+          origem: 'fiorilli'
+        };
+      });
+      return { ...s, linhas, pendentes: s.pendentes.map((l) => ({ ...l })) };
+    });
+
+    (camada ? camada.incluidas : []).forEach((ficha) => {
+      if (naPlanilha.has(ficha)) return;
+      const oficial = valoresOficiais(camada, ficha);
+      const secretaria = combinadas.find((s) => s.codigo === codigoPorUe(oficial.ue));
+      if (!secretaria) return;
+      inserirPorFicha(secretaria.linhas, {
+        ...schema.criarLinha({ ...oficial, id: idLinhaIncluida(ficha), ficha, saldoFicha: oficial.saldoFicha || 0, descricao: '', observacao: '', essencial: 0 }),
+        origem: 'fiorilli'
+      });
+    });
+    return combinadas;
+  }
+
+  /** Soma da Reserva por ficha de uma secretaria. */
+  function reservaPorFicha(secretaria) {
+    const somas = new Map();
+    secretaria.linhas.forEach((l) => somas.set(l.ficha, arredondar((somas.get(l.ficha) || 0) + (Number(l.reserva) || 0))));
+    return somas;
+  }
+
+  /**
+   * Prévia da troca do filtro em vigor (nada é alterado aqui): compara a base
+   * combinada com o filtro atual e com o novo filtro.
+   * Fichas fora do relatório Fiorilli ("sem composição") mantêm a Reserva da planilha.
+   * @param {Array} secretarias camada da planilha
+   * @param {Object|null} camada camada Fiorilli
+   * @param {Object} filtro novo filtro { processos, fontes }
+   * @returns {Object} plano; `plano.secretarias` = base combinada com o novo filtro
+   */
+  function planejarRecalculo(secretarias, camada, filtro) {
+    const antes = combinar(secretarias, camada);
+    const depois = combinar(secretarias, camada && { ...camada, filtro: normalizarFiltro(filtro) });
+    const plano = { alteracoes: [], semComposicao: 0, recalculaveis: 0, porSecretaria: [], totalAntes: 0, totalDepois: 0, secretarias: depois };
+    antes.forEach((s, i) => {
+      const somasDepois = reservaPorFicha(depois[i]);
       let antesSec = 0;
       let depoisSec = 0;
-      vistas.forEach((antes, ficha) => {
-        antesSec += antes;
-        if (!composicoes || !composicoes[ficha]) { plano.semComposicao += 1; depoisSec += antes; return; }
+      reservaPorFicha(s).forEach((valorAntes, ficha) => {
+        const valorDepois = somasDepois.get(ficha) || 0;
+        antesSec += valorAntes;
+        depoisSec += valorDepois;
+        if (!camada || !camada.fichas[ficha]) { plano.semComposicao += 1; return; }
         plano.recalculaveis += 1;
-        const depois = reservaPorFiltro(composicoes[ficha], filtro);
-        depoisSec += depois;
-        if (Math.abs(depois - antes) > TOLERANCIA) plano.alteracoes.push({ codigo: s.codigo, ficha, antes, depois });
+        if (Math.abs(valorDepois - valorAntes) > TOLERANCIA) plano.alteracoes.push({ codigo: s.codigo, ficha, antes: valorAntes, depois: valorDepois });
       });
       plano.porSecretaria.push({ codigo: s.codigo, nome: s.nome, antes: arredondar(antesSec), depois: arredondar(depoisSec) });
       plano.totalAntes += antesSec;
@@ -203,30 +328,28 @@
   }
 
   /**
-   * Aplica o recálculo e devolve NOVAS secretarias (imutável): a Reserva da ficha
-   * vai para a 1ª linha (linha-âncora) e as demais linhas da ficha ficam com 0,
-   * como na atualização Fiorilli.
+   * Migração dos dados da v1.5, em que os valores do Fiorilli eram gravados nas
+   * linhas e só as composições das fichas da base eram guardadas.
+   * Cria a camada a partir das linhas dessas fichas; o filtro em vigor é, entre os
+   * candidatos, o que reproduz o maior número de Reservas gravadas.
+   * @returns {Object|null}
    */
-  function aplicarRecalculo(secretarias, plano) {
-    const porChave = new Map(plano.alteracoes.map((a) => [`${a.codigo}|${a.ficha}`, a.depois]));
-    return secretarias.map((s) => {
-      if (!plano.alteracoes.some((a) => a.codigo === s.codigo)) return s;
-      const vistas = new Set();
-      const linhas = s.linhas.map((l) => {
-        const chave = `${s.codigo}|${l.ficha}`;
-        if (!porChave.has(chave)) return l;
-        const primeira = !vistas.has(l.ficha);
-        vistas.add(l.ficha);
-        return { ...l, reserva: primeira ? porChave.get(chave) : 0 };
-      });
-      return { ...s, linhas };
-    });
-  }
-
-  /** Composições somente das fichas presentes na base (o que é guardado no navegador). */
-  function composicoesDaBase(secretarias, registros) {
-    const fichas = new Set(secretarias.flatMap((s) => s.linhas.map((l) => l.ficha)));
-    return Object.fromEntries(registros.filter((r) => fichas.has(r.ficha) && r.composicao).map((r) => [r.ficha, r.composicao]));
+  function camadaDaVersaoAnterior(secretarias, composicoes, meta, candidatosFiltro) {
+    if (!composicoes || !Object.keys(composicoes).length) return null;
+    const porFicha = new Map();
+    secretarias.forEach((s) => s.linhas.forEach((l) => {
+      if (!composicoes[l.ficha]) return;
+      if (!porFicha.has(l.ficha)) {
+        porFicha.set(l.ficha, { ficha: l.ficha, ue: l.ue, fonte: l.fonte, despesa: l.despesa, saldoFicha: 0, reserva: 0, composicao: composicoes[l.ficha] });
+      }
+      const r = porFicha.get(l.ficha);
+      r.saldoFicha = arredondar(r.saldoFicha + (Number(l.saldoFicha) || 0));
+      r.reserva = arredondar(r.reserva + (Number(l.reserva) || 0));
+    }));
+    const registros = [...porFicha.values()];
+    const acertos = (f) => registros.filter((r) => Math.abs(reservaPorFiltro(r.composicao, f) - r.reserva) <= TOLERANCIA).length;
+    const filtro = candidatosFiltro.filter(Boolean).reduce((melhor, f) => (acertos(f) > acertos(melhor) ? f : melhor));
+    return criarCamada({ registros, meta: meta || {}, filtro });
   }
 
   /** "download-15-09-2026.xls" -> "15/09/2026" */
@@ -420,54 +543,11 @@
     return plano;
   }
 
-  /**
-   * Etapa 3 — aplica o plano e devolve NOVAS secretarias (imutável).
-   * - Fichas existentes: U.E, Fonte e Despesa atualizadas em todas as linhas da ficha;
-   *   Reserva e Saldo gravados na 1ª linha (demais = 0), mantendo a soma correta.
-   *   Sem coluna de saldo mapeada, o Saldo Ficha da planilha é mantido.
-   * - Fichas novas: incluídas com Descrição e Essencial em branco (preenchidos pelo usuário).
-   */
-  function aplicar(secretarias, registros, plano) {
-    const porFicha = new Map(registros.map((r) => [r.ficha, r]));
-    const novas = secretarias.map((s) => {
-      const vistas = new Set();
-      const linhas = s.linhas.map((l) => {
-        const r = porFicha.get(l.ficha);
-        if (!r) return { ...l };
-        const primeira = !vistas.has(l.ficha);
-        vistas.add(l.ficha);
-        return {
-          ...l,
-          ue: r.ue,
-          fonte: r.fonte,
-          despesa: r.despesa,
-          reserva: primeira ? r.reserva : 0,
-          saldoFicha: temSaldoFicha(r) ? (primeira ? r.saldoFicha : 0) : l.saldoFicha
-        };
-      });
-      return { ...s, linhas, pendentes: s.pendentes.map((l) => ({ ...l })) };
-    });
-
-    plano.inclusoes.forEach(({ codigo, registro }) => {
-      const secretaria = novas.find((s) => s.codigo === codigo);
-      if (!secretaria) return;
-      const linha = schema.criarLinha({
-        ficha: registro.ficha, ue: registro.ue, fonte: registro.fonte, despesa: registro.despesa,
-        reserva: registro.reserva, saldoFicha: registro.saldoFicha || 0,
-        descricao: '', observacao: '', essencial: 0
-      });
-      // Mantém a ordem aproximada por número de ficha.
-      const posicao = secretaria.linhas.findIndex((l) => Number(l.ficha) > Number(registro.ficha));
-      if (posicao < 0) secretaria.linhas.push(linha);
-      else secretaria.linhas.splice(posicao, 0, linha);
-    });
-    return novas;
-  }
-
   App.data.fiorilli = Object.freeze({
     CAMPOS_OFICIAIS, CAMPOS_OPCIONAIS, ROTULOS, PROCESSO_VAZIO,
     letraParaIndice, indiceParaLetra, detectarColunas, validarColunas, normalizarFiltro, validarFiltro, atendeFiltro, listaDeTexto,
-    extrairDataArquivo, codigoPorUe, lerRegistros, planejar, aplicar,
-    reservaPorFiltro, opcoesDasComposicoes, planejarRecalculo, aplicarRecalculo, composicoesDaBase
+    extrairDataArquivo, codigoPorUe, lerRegistros, planejar,
+    reservaPorFiltro, opcoesDasComposicoes, planejarRecalculo,
+    criarCamada, normalizarCamada, combinar, idLinhaIncluida, camadaDaVersaoAnterior
   });
 })(window.OrcApp);

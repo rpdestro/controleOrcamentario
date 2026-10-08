@@ -93,13 +93,14 @@
         { ficha: '999', despesa: '3.3.90.39', essencial: 0, reserva: 80 } // sem composição
       ]
     })];
-    const composicoes = fio.composicoesDaBase(base(), lido.registros);
+    // v1.6: as composições ficam na camada Fiorilli (todas as fichas do relatório).
+    const camada = fio.criarCamada({ registros: lido.registros, filtro: FILTRO });
     const novoFiltro = fio.normalizarFiltro({ processos: '001.003, 001.003.2, 001.005', fontes: '1' });
 
-    it('composições guardadas somente das fichas da base', () => expect(Object.keys(composicoes).sort()).toEqual(['338', '345']));
-    it('mesmo filtro da carga = nenhuma alteração', () => expect(fio.planejarRecalculo(base(), composicoes, FILTRO).alteracoes.length).toBe(0));
+    it('camada guarda a composição de todas as fichas do relatório', () => expect(Object.keys(camada.fichas).sort()).toEqual(['338', '345']));
+    it('mesmo filtro da carga = nenhuma alteração', () => expect(fio.planejarRecalculo(base(), camada, FILTRO).alteracoes.length).toBe(0));
     it('novo filtro: lista as fichas alteradas e os totais', () => {
-      const plano = fio.planejarRecalculo(base(), composicoes, novoFiltro);
+      const plano = fio.planejarRecalculo(base(), camada, novoFiltro);
       expect(plano.alteracoes).toEqual([
         { codigo: '02.07', ficha: '338', antes: 100, depois: 140 },
         { codigo: '02.07', ficha: '345', antes: 0, depois: 60 }
@@ -108,9 +109,9 @@
       expect(plano.totalAntes).toBe(180);
       expect(plano.totalDepois).toBe(280);
     });
-    it('aplicar grava na linha-âncora, zera as demais e mantém fichas sem composição', () => {
+    it('base recalculada: Reserva na linha-âncora, demais zeradas e fichas sem composição mantidas', () => {
       const oficiais = base();
-      const novas = fio.aplicarRecalculo(oficiais, fio.planejarRecalculo(oficiais, composicoes, novoFiltro));
+      const novas = fio.planejarRecalculo(oficiais, camada, novoFiltro).secretarias;
       expect(novas[0].linhas.map((l) => l.reserva)).toEqual([140, 0, 60, 80]);
       expect(oficiais[0].linhas[0].reserva).toBe(100); // imutável
     });

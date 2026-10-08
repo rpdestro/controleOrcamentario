@@ -69,6 +69,20 @@
     return `${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
   }
 
+  /**
+   * Compara duas datas "dd/mm/aaaa" (o texto pode ter outras palavras em volta).
+   * Retorna -1 (a antes de b), 0 (iguais) ou 1; 0 também quando alguma não é reconhecida.
+   */
+  function compararDatasBR(a, b) {
+    const chave = (t) => {
+      const m = String(t || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      return m ? Number(m[3]) * 10000 + Number(m[2]) * 100 + Number(m[1]) : null;
+    };
+    const [ka, kb] = [chave(a), chave(b)];
+    if (ka === null || kb === null || ka === kb) return 0;
+    return ka < kb ? -1 : 1;
+  }
+
   /** Texto seguro para nomes de arquivo: "Relatório 02.01" -> "relatorio-02-01" */
   function slug(texto) {
     return normalizarTexto(texto).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -80,6 +94,6 @@
   }
 
   App.utils.format = Object.freeze({
-    arredondar, moeda, numero, paraNumero, normalizarTexto, dataBR, dataHoraBR, slug, nomeCurto
+    arredondar, moeda, numero, paraNumero, normalizarTexto, dataBR, dataHoraBR, compararDatasBR, slug, nomeCurto
   });
 })(window.OrcApp);

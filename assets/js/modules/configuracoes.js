@@ -191,9 +191,7 @@
    * entre recalcular agora, só salvar o filtro (vale na próxima atualização) ou cancelar.
    */
   function abrirPreviaRecalculo(filtro, plano) {
-    const fiorilli = App.data.fiorilli;
-    const novas = fiorilli.aplicarRecalculo(store.getSecretarias(), plano);
-    const negativas = novasNegativas(novas);
+    const negativas = novasNegativas(plano.secretarias);
     const diferenca = plano.totalDepois - plano.totalAntes;
     const secretariasAlteradas = plano.porSecretaria
       .filter((s) => Math.abs(s.depois - s.antes) > 0.005)
@@ -215,13 +213,13 @@
             ['Reserva total após', moeda(plano.totalDepois)],
             ['Diferença', `${diferenca > 0 ? '+' : ''}${moeda(diferenca)}`],
             ['Fichas com Reserva alterada', String(plano.alteracoes.length)],
-            ['Fichas sem composição (mantidas)', String(plano.semComposicao)]
+            ['Fichas fora do relatório Fiorilli (mantidas)', String(plano.semComposicao)]
           ].flatMap(([t, v]) => [
             criar('dt', { classe: 'resumo-lista__termo', texto: t }),
             criar('dd', { classe: 'resumo-lista__valor', texto: v, testid: `recalculo-${App.utils.format.slug(t)}` })
           ])
         }),
-        plano.semComposicao ? alerta({ nivel: 'aviso', mensagem: 'Fichas sem composição registrada (incluídas manualmente ou ausentes na última atualização Fiorilli) mantêm a Reserva atual.' }) : null,
+        plano.semComposicao ? alerta({ nivel: 'aviso', mensagem: 'Fichas que não estão no último relatório do Fiorilli (incluídas manualmente ou sem notas de reserva) mantêm a Reserva da planilha.' }) : null,
         negativas.length ? alerta({
           nivel: 'erro',
           testid: 'recalculo-negativas',
@@ -271,7 +269,7 @@
           rotulo: 'Recalcular reservas', variante: 'primario', testid: 'btn-recalculo-confirmar',
           aoClicar: ({ fechar }) => {
             try {
-              store.recalcularReservas(filtro, novas);
+              store.recalcularReservas(filtro);
               fechar();
               toast.sucesso(`Filtro salvo e Reserva recalculada em ${plano.alteracoes.length} ficha(s).`);
             } catch (erro) {
@@ -283,16 +281,16 @@
     });
   }
 
-  /** Salva o filtro; com composição registrada, recalcula as Reservas em tempo real (após a prévia). */
+  /** Salva o filtro; com um relatório Fiorilli aplicado, recalcula as Reservas em tempo real (após a prévia). */
   function salvarFiltro(filtro) {
-    if (!store.temComposicaoReservas()) {
+    if (!store.temCamadaFiorilli()) {
       store.definirFiltroReservas(filtro);
-      toast.sucesso('Filtro de reservas salvo. Ele vale para a próxima atualização Fiorilli (ainda não há composição das reservas registrada).');
+      toast.sucesso('Filtro de reservas salvo. Ele vale para a próxima atualização Fiorilli (ainda não há relatório aplicado).');
       return;
     }
-    const plano = App.data.fiorilli.planejarRecalculo(store.getSecretarias(), store.getComposicaoReservas(), filtro);
+    const plano = App.data.fiorilli.planejarRecalculo(store.getSecretariasPlanilha(), store.getCamadaFiorilli(), filtro);
     if (!plano.alteracoes.length) {
-      store.definirFiltroReservas(filtro);
+      store.recalcularReservas(filtro); // também passa a ser o filtro em vigor
       toast.sucesso('Filtro de reservas salvo. Nenhuma Reserva muda com este filtro.');
       return;
     }
@@ -347,8 +345,27 @@
     });
   }
 
+  /** Descarta a camada Fiorilli (Reserva e Saldo voltam aos valores da planilha). */
+  async function descartarFiorilli() {
+    const confirmado = await modal.confirmar({
+      titulo: 'Descartar saldos do Fiorilli',
+      mensagem: 'Reserva, Saldo Ficha, U.E, Fonte e Despesa voltam aos valores da planilha importada. As fichas incluídas pelo Fiorilli continuam na base. Para voltar aos saldos oficiais, use "Atualizar Fiorilli" novamente. Deseja continuar?',
+      rotuloConfirmar: 'Descartar',
+      perigo: true,
+      testid: 'modal-descartar-fiorilli'
+    });
+    if (!confirmado) return;
+    try {
+      store.descartarFiorilli();
+      toast.sucesso('Saldos do Fiorilli descartados. A base usa os valores da planilha.');
+    } catch (erro) {
+      toast.erro(erro.message);
+    }
+  }
+
   function secaoDados() {
     const meta = store.getEstado().meta;
+    const fiorilli = store.getInfoFiorilli();
     return criar('section', {
       classe: 'cartao',
       testid: 'config-dados',
@@ -357,13 +374,23 @@
         criar('dl', {
           classe: 'resumo-lista',
           filhos: [
-            ['Arquivo importado', meta.arquivo || '—'],
-            ['Importado em', meta.importadoEm ? dataHoraBR(meta.importadoEm) : '—'],
+            ['Planilha importada', meta.arquivo || '—'],
+            ['Data da planilha', meta.atualizadoEm || '—'],
+            ['Importada em', meta.importadoEm ? dataHoraBR(meta.importadoEm) : '—'],
+            ['Relatório Fiorilli', fiorilli ? fiorilli.arquivo : '—'],
+            ['Data dos saldos Fiorilli', fiorilli ? fiorilli.dataSaldos || '—' : '—'],
+            ['Fiorilli aplicado em', fiorilli && fiorilli.aplicadoEm ? dataHoraBR(fiorilli.aplicadoEm) : '—'],
             ['Última alteração', meta.alteradoEm ? dataHoraBR(meta.alteradoEm) : '—']
-          ].flatMap(([t, v]) => [criar('dt', { classe: 'resumo-lista__termo', texto: t }), criar('dd', { classe: 'resumo-lista__valor', texto: v })])
+          ].flatMap(([t, v]) => [criar('dt', { classe: 'resumo-lista__termo', texto: t }), criar('dd', { classe: 'resumo-lista__valor', texto: v, testid: `config-dados-${App.utils.format.slug(t)}` })])
         }),
-        alerta({ nivel: 'info', mensagem: 'As alterações ficam salvas automaticamente neste navegador. Use "Salvar base Excel" no topo para gravar a planilha no seu computador.' }),
-        botao({ rotulo: 'Limpar dados locais', variante: 'perigo', testid: 'btn-limpar-dados', aoClicar: limparDados })
+        alerta({ nivel: 'info', mensagem: 'A planilha e o relatório do Fiorilli ficam guardados separadamente: podem ser carregados em qualquer ordem. As alterações ficam salvas automaticamente neste navegador. Use "Salvar base Excel" no topo para gravar a planilha no seu computador.' }),
+        criar('div', {
+          classe: 'form__acoes',
+          filhos: [
+            fiorilli ? botao({ rotulo: 'Descartar saldos do Fiorilli', variante: 'perigo-texto', testid: 'btn-descartar-fiorilli', aoClicar: descartarFiorilli }) : null,
+            botao({ rotulo: 'Limpar dados locais', variante: 'perigo', testid: 'btn-limpar-dados', aoClicar: limparDados })
+          ]
+        })
       ]
     });
   }

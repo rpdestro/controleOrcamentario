@@ -3,6 +3,7 @@
  * @description Fluxo de importação de planilha (XLS/XLSX/CSV) em 2 etapas:
  *  1) seleção e leitura do arquivo (com validação visível);
  *  2) pré-visualização (resumo + alertas) e confirmação da substituição.
+ * v1.6: substitui só a camada da planilha; os saldos do Fiorilli já aplicados continuam valendo.
  */
 (function (App) {
   'use strict';
@@ -14,6 +15,58 @@
   const toast = App.ui.toast;
 
   let resultadoLido = null;
+  let caixaDescartar = null; // "Descartar as transferências registradas" (só existe quando há transferências)
+
+  /**
+   * v1.6: a importação troca só a camada da planilha. Informa quantas fichas
+   * continuarão com os saldos do Fiorilli e se a planilha é mais nova que o relatório.
+   */
+  function blocoFiorilli(resultado) {
+    const info = store.getInfoFiorilli();
+    if (!info) {
+      return alerta({ nivel: 'info', testid: 'importar-sem-fiorilli', mensagem: 'Reserva e Saldo Ficha virão da planilha. Depois, use "Atualizar Fiorilli" para aplicar os saldos oficiais (a ordem não altera o resultado).' });
+    }
+    const camada = store.getCamadaFiorilli();
+    const fichas = new Set(resultado.secretarias.flatMap((s) => s.linhas.map((l) => l.ficha)));
+    const cobertas = [...fichas].filter((f) => camada.fichas[f]).length;
+    const maisNova = App.utils.format.compararDatasBR(resultado.meta.atualizadoEm, info.dataSaldos) > 0;
+    return criar('div', {
+      filhos: [
+        alerta({
+          nivel: 'info',
+          testid: 'importar-fiorilli-mantido',
+          mensagem: `Os saldos oficiais do Fiorilli de ${info.dataSaldos || '—'} continuam valendo: ${cobertas} de ${fichas.size} fichas da planilha estão no relatório e usarão Reserva, Saldo Ficha, U.E, Fonte e Despesa do Fiorilli. As demais usam os valores da planilha.`
+        }),
+        maisNova ? alerta({
+          nivel: 'aviso',
+          testid: 'importar-fiorilli-desatualizado',
+          mensagem: `A planilha (${resultado.meta.atualizadoEm}) é mais recente que o relatório Fiorilli em uso (${info.dataSaldos}). Considere atualizar o Fiorilli em seguida.`
+        }) : null
+      ]
+    });
+  }
+
+  /** Transferências registradas: aviso e opção de descartá-las junto com a importação. */
+  function blocoTransferencias(resultado) {
+    caixaDescartar = null;
+    const transferencias = store.getTransferencias();
+    if (!transferencias.length) return null;
+    const novaBase = App.data.fiorilli.combinar(resultado.secretarias, store.getCamadaFiorilli());
+    const orfas = App.data.movimentacoes.listarOrfas(novaBase, transferencias).length;
+    caixaDescartar = criar('input', { testid: 'importar-descartar-transferencias', attrs: { type: 'checkbox' } });
+    return criar('div', {
+      filhos: [
+        alerta({
+          nivel: 'aviso',
+          testid: 'importar-aviso-transferencias',
+          mensagem: `Há ${transferencias.length} transferência(s) entre fichas registrada(s) sobre a base atual` +
+            `${orfas ? `; ${orfas} delas usam fichas que não existem na nova planilha` : ''}. ` +
+            'Se a planilha nova já reflete essas movimentações, descarte-as para não contar duas vezes.'
+        }),
+        criar('label', { classe: 'form__radio', filhos: [caixaDescartar, criar('span', { texto: `Descartar as ${transferencias.length} transferência(s) registrada(s)` })] })
+      ]
+    });
+  }
 
   /** Lista de alertas (limitada) exibida na pré-visualização. */
   function listaAlertas(alertas) {
@@ -54,8 +107,10 @@
           ])
         }),
         listaAlertas(resultado.alertas),
+        blocoFiorilli(resultado),
+        blocoTransferencias(resultado),
         store.temDados()
-          ? alerta({ nivel: 'aviso', mensagem: 'Atenção: ao confirmar, os dados atuais serão substituídos pelos do arquivo.', testid: 'importar-aviso-substituicao' })
+          ? alerta({ nivel: 'aviso', mensagem: 'Atenção: ao confirmar, as linhas da planilha atual (Descrição, Essencial, Período, Anotações, Folha) serão substituídas pelas do arquivo.', testid: 'importar-aviso-substituicao' })
           : null
       ]
     });
@@ -94,7 +149,7 @@
         resumoErros('importar-resumo-erros'),
         campo({
           id: 'importar-arquivo', nome: 'arquivo', rotulo: 'Planilha de origem', tipo: 'file', obrigatorio: true,
-          dica: 'Formatos aceitos: XLSX, XLS ou CSV. Ex.: "Planilha Léo Outubro.xlsx".',
+          dica: 'Formatos aceitos: XLSX, XLS ou CSV. Ex.: "base-orcamento-data".',
           testid: 'input-importar-arquivo',
           attrs: { accept: '.xlsx,.xls,.csv' }
         }),
@@ -121,7 +176,7 @@
 
     function confirmar() {
       if (!resultadoLido) return;
-      store.substituirDados(resultadoLido);
+      store.substituirDados(resultadoLido, { descartarTransferencias: Boolean(caixaDescartar && caixaDescartar.checked) });
       const { qtdSecretarias, qtdLinhas } = resultadoLido.resumo;
       toast.sucesso(`Importação concluída: ${qtdSecretarias} secretarias e ${qtdLinhas} linhas.`);
       if (resultadoLido.alertas.length) toast.aviso(`${resultadoLido.alertas.length} alerta(s) de conferência. Veja o Painel.`);

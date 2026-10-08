@@ -336,6 +336,28 @@ details[open] > summary.cartao__titulo {
 .selo--atende { background: var(--cor-sit-atende-solida); }
 .selo--positivo { background: var(--cor-sit-positivo-solida); }
 
+/* Coluna "Situação / Saldo Total": selo de largura fixa + valor alinhado à
+   direita, para os valores formarem uma coluna legível entre as fichas. */
+.situacao-saldo {
+  display: inline-grid;
+  grid-template-columns: 6.5em auto;
+  align-items: center;
+  gap: var(--esp-2);
+}
+
+.situacao-saldo .selo { justify-self: start; }
+
+.situacao-saldo__valor {
+  min-width: 9em;
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.situacao-saldo__valor--deficit { color: var(--cor-sit-deficit); }
+.situacao-saldo__valor--atende { color: var(--cor-sit-atende); }
+.situacao-saldo__valor--positivo { color: var(--cor-sit-positivo); }
+
 /* Somente leitores de tela */
 .sr-only {
   position: absolute;
@@ -487,6 +509,13 @@ details[open] > summary.cartao__titulo {
 
 .form__controle:focus {
   border-color: var(--cor-primaria);
+}
+
+/* v1.6: campo oficial vindo do Fiorilli (somente leitura) */
+.form__controle[readonly] {
+  background: var(--cor-superficie-alt);
+  color: var(--cor-texto-suave);
+  cursor: not-allowed;
 }
 
 .form__controle--invalido {

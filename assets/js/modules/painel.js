@@ -23,25 +23,35 @@
   const filtro = { periodo: '' };
   let filtroConsolidado = filtroTabela.criarEstado();
 
-  /** Situação da última atualização oficial (Fiorilli). */
-  function blocoFiorilli(info) {
+  /**
+   * Origem dos saldos (v1.6): relatório Fiorilli em uso, quantas fichas usam o
+   * Fiorilli ou a planilha e aviso quando a planilha é mais recente que o relatório.
+   */
+  function blocoFiorilli(info, meta) {
+    const botaoAtualizar = () => botao({ rotulo: 'Atualizar com Fiorilli', tamanho: 'pequeno', variante: 'fantasma', testid: 'btn-painel-fiorilli', aoClicar: App.modules.fiorilli.abrir });
     if (!info) {
       return alerta({
         nivel: 'info',
         testid: 'painel-fiorilli-pendente',
-        filhos: [
-          'Reserva e Saldo ainda não foram atualizados com o Fiorilli. ',
-          botao({ rotulo: 'Atualizar com Fiorilli', tamanho: 'pequeno', variante: 'fantasma', testid: 'btn-painel-fiorilli', aoClicar: App.modules.fiorilli.abrir })
-        ]
+        filhos: ['Origem dos saldos: planilha. Reserva e Saldo ainda não foram atualizados com o Fiorilli. ', botaoAtualizar()]
       });
     }
-    const regra = info.filtro
-      ? ` Reserva = processos ${info.filtro.processos.join(', ') || '(qualquer)'} · fonte ${info.filtro.fontes.join(', ') || '(qualquer)'}.`
-      : '';
-    return alerta({
-      nivel: 'sucesso',
-      testid: 'painel-fiorilli-status',
-      mensagem: `Saldos oficiais Fiorilli de ${info.dataSaldos || '—'} (arquivo ${info.arquivo}) aplicados em ${dataHoraBR(info.aplicadoEm)}: ${info.atualizadas} fichas atualizadas, ${info.incluidas} incluídas.${regra}`
+    const regra = ` Reserva = processos ${info.filtro.processos.join(', ') || '(qualquer)'} · fonte ${info.filtro.fontes.join(', ') || '(qualquer)'}.`;
+    const desatualizado = App.utils.format.compararDatasBR(meta.atualizadoEm, info.dataSaldos) > 0;
+    return criar('div', {
+      filhos: [
+        alerta({
+          nivel: 'sucesso',
+          testid: 'painel-fiorilli-status',
+          mensagem: `Origem dos saldos: Fiorilli de ${info.dataSaldos || '—'} (arquivo ${info.arquivo}, aplicado em ${dataHoraBR(info.aplicadoEm)}) em ${info.fichasFiorilli} ficha(s); ` +
+            `${info.fichasPlanilha} ficha(s) fora do relatório usam os valores da planilha.${regra}`
+        }),
+        desatualizado ? alerta({
+          nivel: 'aviso',
+          testid: 'painel-fiorilli-desatualizado',
+          filhos: [`A planilha (${meta.atualizadoEm}) é mais recente que o relatório Fiorilli em uso (${info.dataSaldos}). `, botaoAtualizar()]
+        }) : null
+      ]
     });
   }
 
@@ -217,7 +227,7 @@
     const naoPadronizados = calculos.contarNaoPadronizados(secretarias);
 
     container.append(...[
-      blocoFiorilli(meta.fiorilli),
+      blocoFiorilli(store.getInfoFiorilli(), meta),
       blocoMovimentacoes(store.getTransferencias()),
       filtroPeriodo(periodos),
       filtro.periodo ? alerta({ nivel: 'info', mensagem: `Exibindo: ${periodo.rotuloFiltro(filtro.periodo)}. A Folha não é considerada.`, testid: 'painel-filtro-ativo' }) : null,

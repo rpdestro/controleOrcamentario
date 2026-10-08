@@ -220,10 +220,13 @@
       expect(plano.porSecretaria.find((s) => s.codigo === '02.02').depois).toBe(5000);
     });
 
+    // v1.6: a aplicação é a combinação da planilha com a camada Fiorilli.
+    const camadaDe = (registros, plano) => fio.criarCamada({ registros, filtro: FILTRO, incluidas: plano.inclusoes.map((i) => i.registro.ficha) });
+
     it('aplica sem tocar em Descrição/Essencial/Período e mantém a soma por ficha', () => {
       const secretarias = base();
       const plano = fio.planejar(secretarias, lido.registros, {});
-      const [nova, habitacao] = fio.aplicar(secretarias, lido.registros, plano);
+      const [nova, habitacao] = fio.combinar(secretarias, camadaDe(lido.registros, plano));
       const ficha25 = nova.linhas.filter((l) => l.ficha === '25');
       expect(ficha25[0].saldoFicha).toBe(20000);
       expect(ficha25[1].saldoFicha).toBe(0);
@@ -245,7 +248,7 @@
       const secretarias = base();
       const plano = fio.planejar(secretarias, semSaldo.registros, {});
       expect(plano.atualizacoes.find((a) => a.ficha === '25').alteracoes.map((a) => a.campo)).toEqual(['reserva']);
-      const [nova] = fio.aplicar(secretarias, semSaldo.registros, plano);
+      const [nova] = fio.combinar(secretarias, camadaDe(semSaldo.registros, plano));
       expect(nova.linhas.find((l) => l.ficha === '25').saldoFicha).toBe(11972.12);
     });
 

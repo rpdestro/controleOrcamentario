@@ -156,9 +156,19 @@
   function abrirFormularioLinha(secretaria, linha = null) {
     const dados = linha || { ficha: '', ue: '', fonte: '1', despesa: '', descricao: '', observacao: '', periodoInicio: '', periodoFim: '' };
     const valorCampo = (c) => (c.tipo === 'moeda' ? (linha ? numero(dados[c.chave]) : '') : dados[c.chave]);
+    // v1.6: ficha presente no relatório Fiorilli aplicado → campos oficiais vêm da integração (somente leitura).
+    const infoFiorilli = linha && store.fichaNoFiorilli(linha.ficha) ? store.getInfoFiorilli() : null;
+    const somenteLeitura = (chave) => Boolean(infoFiorilli) && ['ue', 'fonte', 'despesa', 'reserva', 'saldoFicha'].includes(chave);
 
     const campos = config.CAMPOS_LINHA.flatMap((c) => {
       if (c.chave === 'observacao') return camposPeriodo(dados);
+      if (somenteLeitura(c.chave)) {
+        return [campo({
+          id: `linha-${c.chave}`, nome: c.chave, rotulo: c.rotulo, valor: valorCampo(c), testid: `input-linha-${c.chave}`,
+          dica: `Fiorilli de ${infoFiorilli.dataSaldos || '—'} · atualizado pela integração`,
+          attrs: { readonly: true, 'aria-readonly': 'true', autocomplete: 'off' }
+        })];
+      }
       return [campo({
         id: `linha-${c.chave}`,
         nome: c.chave,
@@ -509,28 +519,33 @@
     return [
       ...COLUNAS_BASE,
       {
-        // Informativo: (Saldo Ficha + Reserva) − Essencial da ficha, na linha-âncora.
-        // Não entra nos totais, indicadores nem na Folha.
-        rotulo: 'Saldo Total', id: 'saldoTotal', moeda: true,
-        render: (l) => {
-          const f = fichas.get(l.ficha);
-          if (!f || f.idAncora !== l.id) return '';
-          const total = arredondar(f.disponivel - f.necessidade);
-          return criar('span', { classe: `valor valor--${varianteSinal(total)}`, texto: moeda(total), testid: `saldo-total-ficha-${f.ficha}` });
-        }
-      },
-      {
-        rotulo: 'Situação', id: ID_COLUNA_SITUACAO, filtravel: true, classe: 'tabela__celula--nowrap',
+        // Selo + Saldo Total ao lado, na linha-âncora. O Saldo Total
+        // ((Saldo Ficha + Reserva) − Essencial da ficha) é apenas informativo:
+        // não entra nos totais, indicadores nem na Folha.
+        rotulo: 'Situação / Saldo Total', id: ID_COLUNA_SITUACAO, filtravel: true, classe: 'tabela__celula--nowrap',
         valorFiltro: (l) => rotuloSituacao(situacao(l)),
         valorOrdem: (l) => sequencia.indexOf(situacao(l)),
         render: (l) => {
           const f = fichas.get(l.ficha);
           if (!f || f.idAncora !== l.id) return '';
-          const falta = f.necessidade - f.disponivel;
-          return seloSituacao(f.situacao, { complemento: f.situacao === 'deficit' ? `−${moeda(falta)}` : '', testid: `situacao-ficha-${f.ficha}` });
+          const total = arredondar(f.disponivel - f.necessidade);
+          return criar('span', {
+            classe: 'situacao-saldo',
+            filhos: [
+              seloSituacao(f.situacao, { testid: `situacao-ficha-${f.ficha}` }),
+              criar('span', { classe: `situacao-saldo__valor situacao-saldo__valor--${f.situacao}`, texto: saldoComSinal(total), testid: `saldo-total-ficha-${f.ficha}` })
+            ]
+          });
         }
       }
     ];
+  }
+
+  /** Saldo Total com sinal explícito: +R$ 10,00 · −R$ 10,00 · R$ 0,00. */
+  function saldoComSinal(total) {
+    if (total > 0) return `+${moeda(total)}`;
+    if (total < 0) return `−${moeda(-total)}`;
+    return moeda(0);
   }
 
   /**
@@ -571,7 +586,7 @@
       classeLinha: classificadorFichas(visiveis, fichas),
       atributosLinha: (l) => ({ 'data-id': l.id, 'data-ficha': l.ficha }),
       filtro: { estado: filtro.colunas, linhasBase: base, aoAlterar: aoAlterarColunas },
-      rodape: ['', '', '', '', visiveis.length ? 'Totais' : 'Nenhuma linha corresponde aos filtros', '', moeda(soma.essencial), moeda(soma.reserva), moeda(soma.saldoFicha), '', '', '']
+      rodape: ['', '', '', '', visiveis.length ? 'Totais' : 'Nenhuma linha corresponde aos filtros', '', moeda(soma.essencial), moeda(soma.reserva), moeda(soma.saldoFicha), '', '']
     });
   }
 
@@ -603,7 +618,8 @@
     const todas = store.getTransferencias();
     const lista = todas.filter((t) => t.origem.secretaria === codigo || t.destino.secretaria === codigo).reverse();
     if (!lista.length) return null;
-    const fiorilli = store.getEstado().meta.fiorilli;
+    const fiorilli = store.getInfoFiorilli();
+    const importadoEm = store.getEstado().meta.importadoEm;
     const orfas = new Set(mov.listarOrfas(store.getSecretarias(), todas).map((t) => t.id));
     const instrumento = (valor) => (App.core.config.INSTRUMENTOS_TRANSFERENCIA.find((i) => i.valor === valor) || { rotulo: valor }).rotulo.replace(/ \(.*\)$/, '');
     const ponto = (p) => `${p.secretaria === codigo ? '' : `${p.secretaria} · `}Ficha ${p.ficha}`;
@@ -624,6 +640,7 @@
                 filhos: [
                   dataHoraBR(t.data),
                   fiorilli && t.data < fiorilli.aplicadoEm ? criar('small', { classe: 'tabela__anotacao', texto: '⚠ anterior à última atualização Fiorilli — verifique se já foi efetivada' }) : null,
+                  importadoEm && t.data < importadoEm ? criar('small', { classe: 'tabela__anotacao', texto: '⚠ anterior à importação da planilha atual — verifique se a planilha já a considera' }) : null,
                   orfas.has(t.id) ? criar('small', { classe: 'tabela__anotacao', texto: '⚠ ficha não encontrada na base atual' }) : null
                 ]
               })
