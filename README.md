@@ -8,11 +8,11 @@ Aplicação web para administrar as **demandas financeiras das Secretarias por p
 
 ---
 
-## 1. Como usar
+## 1. Como Usar:
 
 1. Abra o `index.html`.
 2. Clique em **Importar planilha** e escolha a planilha de trabalho (ex.: `Planilha Léo Outubro.xlsx`). Confira a pré-visualização e confirme.
-3. Clique em **Atualizar Fiorilli** e escolha o **relatório de Notas de Reserva** do Fiorilli (ex.: `download-15-09-2026.xls`). Confira o que vai mudar e clique em **Aplicar atualização** (veja a seção 3).
+3. Clique em **Atualizar Fiorilli** e escolha o **relatório de Notas de Reserva** do Fiorilli (ex.: `download-08-10-2026.csv`). Confira o que vai mudar e clique em **Aplicar atualização** (veja a seção 3).
 4. Preencha nas telas das secretarias o que é responsabilidade do usuário: **Descrição**, **Essencial**, **Período** e **Anotações**.
 5. Clique em **Salvar base Excel** para gravar a planilha. No Chrome/Edge, os salvamentos seguintes gravam no mesmo arquivo.
 
@@ -28,7 +28,7 @@ O **brasão da Prefeitura** (`assets/img/brasao.png`), os botões **🌙 Modo es
 
 ---
 
-## 2. Origem de cada campo
+## 2. Origem de cada Campo:
 
 | Campo | Origem | Observação |
 |---|---|---|
@@ -49,7 +49,7 @@ As letras das colunas podem ser alteradas em **Configurações → Integração 
 
 ---
 
-## 3. Atualização com o Fiorilli (relatório de Notas de Reserva)
+## 3. Atualização com o Fiorilli (relatório de Notas de Reserva):
 
 Desde a v1.2, o botão **Atualizar Fiorilli** usa o **relatório de Notas de Reserva** (`download-dd-mm-aaaa.xls`) no lugar do antigo `download-SaldoDotacao-*.csv`. O relatório tem **uma linha por nota** (reserva, anulação ou reforço), com várias notas por ficha.
 
@@ -102,7 +102,7 @@ O mesmo relatório exportado em **CSV** (`download-dd-mm-aaaa.csv`) tem outra or
 
 ---
 
-## 4. Padrão de "Observação (Período)"
+## 4. Padrão de "Observação (Período)":
 
 ### Padrão adotado: intervalo de competências mensais
 O usuário **seleciona** o **mês inicial** e o **mês final** em listas (Jan do ano da base até Dez do ano seguinte). Há atalhos para **"Somente o mês inicial"** e **"Até o fim do exercício (Dez)"**. A planilha recebe um rótulo padronizado:
@@ -134,7 +134,7 @@ As telas mostram um aviso e um atalho **"Mostrar essas linhas"** para revisar as
 
 ---
 
-## 5. Filtros de coluna (padrão Excel)
+## 5. Filtros de Coluna (padrão Excel):
 
 O botão **▾** nos cabeçalhos das tabelas (secretarias e quadro consolidado do Painel) abre:
 - **Classificar** de A a Z / de Z a A (nas colunas de valor: do menor para o maior e vice-versa);
@@ -152,7 +152,7 @@ Dica: para preencher as fichas novas vindas do Fiorilli, filtre a coluna **Descr
 
 ---
 
-## 6. Regras de negócio
+## 6. Regras de Negócio:
 
 - **Resultado = Reserva + Saldo Ficha − Essencial − Folha**, a mesma fórmula da aba GERAL.
 - A coluna "Cortes" da planilha é **ignorada**: não é lida na importação nem aparece no Painel, nos relatórios, nos gráficos ou nas exportações (XLSX, XLS, CSV).
@@ -165,7 +165,7 @@ Dica: para preencher as fichas novas vindas do Fiorilli, filtre a coluna **Descr
 
 ---
 
-## 6-A. Transferências entre fichas e situação orçamentária (v1.4)
+## 6-A. Transferências entre Fichas e Situação Orçamentária (v1.4):
 
 ### Situação de cada ficha (v1.5: três níveis)
 Cada ficha recebe um selo (ícone + texto) na coluna **Situação** e uma borda colorida na sua 1ª linha. A situação compara o **disponível** (Reserva + Saldo Ficha) com a **necessidade** (soma do Essencial da ficha), com tolerância de R$ 0,01.
@@ -212,7 +212,7 @@ Em **Relatórios → Tipo: Gestão de movimentações** (ou **Completo**):
 
 ---
 
-## 7. Arquitetura
+## 7. Arquitetura:
 
 Aplicação 100% front-end, modular e sem build. HTML, CSS e JS ficam separados. O único global é `window.OrcApp`, por isso funciona via `file://`.
 
@@ -259,7 +259,7 @@ controleOrcamentario/
 
 ---
 
-## 8. QA / automação
+## 8. QA / Automação:
 
 - Todo elemento interativo tem `data-testid`. Novidades da v1.1:
 
@@ -291,7 +291,7 @@ controleOrcamentario/
 
 ---
 
-## 9. Uso offline
+## 9. Uso Offline:
 
 A leitura e gravação de Excel usam o **SheetJS** (`xlsx 0.18.5`), carregado do CDN cdnjs. Para usar sem internet:
 1. Salve o `xlsx.full.min.js` em `assets/vendor/`.
@@ -301,19 +301,7 @@ Sem a biblioteca, só os arquivos **CSV** funcionam. O relatório de reservas do
 
 ---
 
-## 10. Sugestões de evolução
-
-1. **Corrigir na planilha de origem:** `GERAL!E18`, `02.35!A3` e `02.10!I42`.
-2. **Revisar as 14 linhas "⚠ Não padronizado"** e decidir o tratamento da ficha "Criar" (02.40).
-3. **Distribuição mensal do Essencial** (alternativa 2 da seção 4), para projeção de fluxo de caixa.
-4. **Histórico de atualizações Fiorilli** (comparar o saldo de 02/10 com o de 09/10, por exemplo).
-5. **Perfis Usuário e Administrador** (planejado): o Administrador altera Configurações (filtro de reservas, colunas, secretarias); o Usuário só lança despesas. Para ter controle de acesso real, é preciso um servidor, porque hoje tudo roda no navegador. Depois, perfis por secretaria e trilha de auditoria.
-6. **Decidir o tratamento das reservas sem processo** (ex.: Saúde, cerca de R$ 2,04 mi na Fonte 1). Ver seção 3.
-7. Testes E2E com Playwright usando os `data-testid` existentes.
-
----
-
-## 11. Histórico de versões
+## 10. Histórico de Versões:
 
 | Versão | Data | Mudanças |
 |---|---|---|
@@ -325,3 +313,15 @@ Sem a biblioteca, só os arquivos **CSV** funcionam. O relatório de reservas do
 | v1.0 | 02/10/2026 | Versão inicial: importação/exportação XLSX/XLS/CSV, Painel, 21 Secretarias, Relatórios, Exportar, Configurações, conferência de totais e consulta de demanda. |
 
 A versão fica em `assets/js/core/config.js` (`APP_VERSAO`), que é a fonte única exibida no cabeçalho e no rodapé.
+
+##
+
+## 👨‍💻 Autor:
+```text
+Renato Pinheiro Destro
+renato.destro@gmail.com
+Auxiliar de Escritório / Prefeitura Municipal de Botucatu/SP
+```
+#### Seja LIVRE, use Linux!
+
+##
