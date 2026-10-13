@@ -68,6 +68,23 @@
   }
 
   /**
+   * Valida um lançamento "fora do quadro" (rascunho). Ficha, U.E, FR, Cód. Despesa,
+   * Descrição e Essencial são obrigatórios; o período não é validado (a exigência
+   * de período vale somente ao incorporar, via validarLinha).
+   * @param {Object} linha
+   */
+  function validarPendente(linha) {
+    const texto = (v) => String(v === null || v === undefined ? '' : v).trim();
+    const { periodoInicio, periodoFim, ...semPeriodo } = linha;
+    const { erros } = validarLinha(semPeriodo);
+    delete erros.observacao;
+
+    if (!texto(linha.descricao)) erros.descricao = 'Informe a descrição.';
+    if (!texto(linha.essencial)) erros.essencial = 'Informe o valor Essencial.';
+    return resultado(erros);
+  }
+
+  /**
    * Valida o cadastro de uma secretaria.
    * @param {{codigo:string,nome:string}} dados
    * @param {string[]} codigosExistentes códigos já cadastrados
@@ -107,5 +124,5 @@
     return resultado({});
   }
 
-  App.utils.validators = Object.freeze({ validarLinha, validarSecretaria, validarValor, validarArquivo, PADROES });
+  App.utils.validators = Object.freeze({ validarLinha, validarPendente, validarSecretaria, validarValor, validarArquivo, PADROES });
 })(window.OrcApp);

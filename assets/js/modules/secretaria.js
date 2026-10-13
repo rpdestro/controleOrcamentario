@@ -8,7 +8,8 @@
  *  - incluir, editar e excluir despesas (formulário validado, período padronizado);
  *  - informar o valor da Folha;
  *  - consultar se uma demanda consta na planilha (gera texto de despacho);
- *  - incorporar lançamentos "fora do quadro";
+ *  - lançamentos "fora do quadro" (rascunhos que não entram em nenhum cálculo):
+ *    incluir, editar, excluir e incorporar ao quadro oficial;
  *  - (v1.4) transferir recursos entre fichas, ver a situação de cada ficha
  *    e o histórico de movimentações;
  *  - (v1.5) situação em três níveis (Positivo / Déficit / Atende), com
@@ -25,7 +26,7 @@
   const { kpi, varianteSinal, tabela, cabecalhoPagina, botao, campo, aplicarErros, resumoErros, alerta, estadoVazio, seloSituacao } = App.ui.componentes;
   const mov = App.data.movimentacoes;
   const animacao = App.ui.animacao;
-  const { validarLinha, validarValor } = App.utils.validators;
+  const { validarLinha, validarPendente, validarValor } = App.utils.validators;
   const filtroTabela = App.utils.filtroTabela;
   const periodo = App.utils.periodo;
   const calculos = App.data.calculos;
@@ -113,13 +114,13 @@
    * Campos de período padronizado: mês inicial + mês final (competências).
    * Atalhos preenchem os casos mais comuns da planilha.
    */
-  function camposPeriodo(dados) {
+  function camposPeriodo(dados, rascunho = false) {
     const meses = periodo.listarMeses(App.data.schema.obterReferencia());
     const opcoes = [{ valor: '', rotulo: 'Selecione…' }, ...meses];
     const inicio = campo({
       id: 'linha-periodoInicio', nome: 'periodoInicio', rotulo: 'Período — mês inicial', tipo: 'select',
       valor: dados.periodoInicio || '', testid: 'input-linha-periodoInicio', opcoes,
-      dica: 'Obrigatório quando houver valor Essencial.'
+      dica: rascunho ? 'Opcional no rascunho; exigido ao incorporar quando houver valor Essencial.' : 'Obrigatório quando houver valor Essencial.'
     });
     const fim = campo({
       id: 'linha-periodoFim', nome: 'periodoFim', rotulo: 'Período — mês final', tipo: 'select',
@@ -152,16 +153,44 @@
     return [avisoLegado ? criar('div', { classe: 'form__campo--largo', filhos: [avisoLegado] }) : null, inicio, fim, atalhos].filter(Boolean);
   }
 
-  /** Abre a modal de inclusão/edição de uma linha de despesa. */
-  function abrirFormularioLinha(secretaria, linha = null) {
+  /**
+   * Modos do formulário de linha:
+   *  - quadro: despesa oficial (padrão);
+   *  - pendente: lançamento fora do quadro (rascunho; validação própria, sem período obrigatório);
+   *  - incorporar: revisão de um rascunho que não passou na validação oficial ao ser incorporado.
+   */
+  const MODOS_FORMULARIO = Object.freeze({
+    quadro: { tituloNovo: 'Nova despesa', tituloEditar: (l) => `Editar despesa — ficha ${l.ficha}`, rotuloSalvar: 'Salvar' },
+    pendente: { tituloNovo: 'Novo lançamento fora do quadro', tituloEditar: (l) => `Editar lançamento fora do quadro — ficha ${l.ficha}`, rotuloSalvar: 'Salvar rascunho' },
+    incorporar: { tituloEditar: (l) => `Revisar e incorporar — ficha ${l.ficha}`, rotuloSalvar: 'Salvar e incorporar' }
+  });
+  /** Campos oficiais (Fiorilli) que não fazem parte do rascunho. */
+  const CAMPOS_FORA_DO_RASCUNHO = Object.freeze(['antes', 'reserva', 'saldoFicha']);
+  const OBRIGATORIOS_RASCUNHO = Object.freeze(['ficha', 'ue', 'fonte', 'despesa', 'descricao', 'essencial']);
+
+  /** Erros do formulário conforme o modo (o rascunho incorporado também precisa cumprir as regras oficiais). */
+  function validarFormulario(modo, valores) {
+    if (modo === 'pendente') return validarPendente(valores).erros;
+    if (modo === 'incorporar') return { ...validarPendente(valores).erros, ...validarLinha(valores).erros };
+    return validarLinha(valores).erros;
+  }
+
+  /**
+   * Abre a modal de inclusão/edição de uma linha de despesa (ou de um rascunho).
+   * @param {Object} [opcoes] { modo: 'quadro'|'pendente'|'incorporar', errosIniciais }
+   */
+  function abrirFormularioLinha(secretaria, linha = null, { modo = 'quadro', errosIniciais = null } = {}) {
+    const rascunho = modo !== 'quadro';
+    const textos = MODOS_FORMULARIO[modo];
     const dados = linha || { ficha: '', ue: '', fonte: '1', despesa: '', descricao: '', observacao: '', periodoInicio: '', periodoFim: '' };
     const valorCampo = (c) => (c.tipo === 'moeda' ? (linha ? numero(dados[c.chave]) : '') : dados[c.chave]);
     // v1.6: ficha presente no relatório Fiorilli aplicado → campos oficiais vêm da integração (somente leitura).
-    const infoFiorilli = linha && store.fichaNoFiorilli(linha.ficha) ? store.getInfoFiorilli() : null;
+    const infoFiorilli = !rascunho && linha && store.fichaNoFiorilli(linha.ficha) ? store.getInfoFiorilli() : null;
     const somenteLeitura = (chave) => Boolean(infoFiorilli) && ['ue', 'fonte', 'despesa', 'reserva', 'saldoFicha'].includes(chave);
 
     const campos = config.CAMPOS_LINHA.flatMap((c) => {
-      if (c.chave === 'observacao') return camposPeriodo(dados);
+      if (rascunho && CAMPOS_FORA_DO_RASCUNHO.includes(c.chave)) return [];
+      if (c.chave === 'observacao') return camposPeriodo(dados, rascunho);
       if (somenteLeitura(c.chave)) {
         return [campo({
           id: `linha-${c.chave}`, nome: c.chave, rotulo: c.rotulo, valor: valorCampo(c), testid: `input-linha-${c.chave}`,
@@ -175,7 +204,7 @@
         rotulo: c.rotulo,
         tipo: ['descricao', 'anotacao'].includes(c.chave) ? 'textarea' : 'text',
         valor: valorCampo(c),
-        obrigatorio: c.obrigatorio,
+        obrigatorio: rascunho ? OBRIGATORIOS_RASCUNHO.includes(c.chave) : c.obrigatorio,
         testid: `input-linha-${c.chave}`,
         classeExtra: ['descricao', 'anotacao'].includes(c.chave) ? 'form__campo--largo' : '',
         dica: {
@@ -196,21 +225,22 @@
     });
 
     const { fechar } = modal.abrir({
-      titulo: linha ? `Editar despesa — ficha ${linha.ficha}` : 'Nova despesa',
+      titulo: linha ? textos.tituloEditar(linha) : textos.tituloNovo,
       testid: 'modal-linha',
       tamanho: 'largo',
       conteudo: formulario,
       acoes: [
         { rotulo: 'Cancelar', testid: 'btn-linha-cancelar', aoClicar: ({ fechar: f }) => f() },
-        { rotulo: 'Salvar', variante: 'primario', tipo: 'submit', form: 'form-linha', testid: 'btn-linha-salvar' }
+        { rotulo: textos.rotuloSalvar, variante: 'primario', tipo: 'submit', form: 'form-linha', testid: 'btn-linha-salvar' }
       ]
     });
+    if (errosIniciais) aplicarErros(formulario, errosIniciais);
 
     formulario.addEventListener('submit', (evento) => {
       evento.preventDefault();
       const valores = Object.fromEntries(new FormData(formulario).entries());
       if (valores.periodoInicio && !valores.periodoFim) valores.periodoFim = valores.periodoInicio;
-      if (!aplicarErros(formulario, validarLinha(valores).erros)) return;
+      if (!aplicarErros(formulario, validarFormulario(modo, valores))) return;
       // Período em texto livre (legado): ao padronizar, o texto antigo vai para "Anotações";
       // sem período selecionado, o texto é mantido para revisão posterior.
       const legado = dados.observacao && !periodo.valido(dados.periodoInicio) ? dados.observacao : '';
@@ -218,8 +248,17 @@
       const anotacao = valores.periodoInicio && legado
         ? App.data.schema.anexarAnotacao(valores.anotacao.trim(), legado)
         : valores.anotacao;
-      store.salvarLinha(secretaria.codigo, { ...valores, observacao, anotacao, id: linha ? linha.id : undefined });
-      toast.sucesso(linha ? 'Despesa atualizada.' : 'Despesa incluída.');
+      const registro = { ...valores, observacao, anotacao, id: linha ? linha.id : undefined };
+      if (modo === 'pendente') {
+        store.salvarPendente(secretaria.codigo, registro);
+        toast.sucesso(linha ? 'Lançamento fora do quadro atualizado.' : 'Lançamento fora do quadro incluído.');
+      } else if (modo === 'incorporar') {
+        store.incorporarPendente(secretaria.codigo, linha.id, registro);
+        toast.sucesso('Lançamento incorporado ao quadro.');
+      } else {
+        store.salvarLinha(secretaria.codigo, registro);
+        toast.sucesso(linha ? 'Despesa atualizada.' : 'Despesa incluída.');
+      }
       fechar();
     });
   }
@@ -665,15 +704,64 @@
     });
   }
 
+  /* ------------------------ Lançamentos fora do quadro ------------------------ */
+
+  /**
+   * Incorpora um rascunho ao quadro oficial. Se ele não cumprir as regras da
+   * despesa oficial (ex.: período obrigatório com Essencial), abre a revisão.
+   */
+  async function incorporarPendente(secretaria, linha) {
+    const erros = validarFormulario('incorporar', linha);
+    if (Object.keys(erros).length) {
+      toast.aviso('Revise os campos destacados antes de incorporar.');
+      abrirFormularioLinha(secretaria, linha, { modo: 'incorporar', errosIniciais: erros });
+      return;
+    }
+    const confirmado = await modal.confirmar({
+      titulo: 'Incorporar ao quadro',
+      mensagem: `Incorporar o lançamento da ficha ${linha.ficha} — "${linha.descricao}" (${moeda(linha.essencial)}) ao quadro oficial? O valor passará a compor os indicadores.`,
+      rotuloConfirmar: 'Incorporar',
+      testid: 'modal-incorporar-pendente'
+    });
+    if (!confirmado) return;
+    store.incorporarPendente(secretaria.codigo, linha.id);
+    toast.sucesso('Lançamento incorporado ao quadro.');
+  }
+
+  async function excluirPendente(secretaria, linha) {
+    const confirmado = await modal.confirmar({
+      titulo: 'Excluir lançamento fora do quadro',
+      mensagem: `Excluir o lançamento da ficha ${linha.ficha} (${linha.despesa}) — "${linha.descricao || 'sem descrição'}"?`,
+      rotuloConfirmar: 'Excluir',
+      perigo: true,
+      testid: 'modal-excluir-pendente'
+    });
+    if (!confirmado) return;
+    store.removerPendente(secretaria.codigo, linha.id);
+    toast.sucesso('Lançamento fora do quadro excluído.');
+  }
+
+  /**
+   * Rascunhos de lançamentos futuros. Ficam fora de todos os cálculos
+   * (indicadores, situação das fichas, consulta de demanda, transferências)
+   * até serem incorporados.
+   */
   function secaoPendentes(secretaria) {
-    if (!secretaria.pendentes.length) return null;
+    const { pendentes } = secretaria;
+    const descreve = (l) => `ficha ${l.ficha} ${l.descricao}`;
     return criar('section', {
       classe: 'cartao',
       testid: 'secretaria-pendentes',
       filhos: [
-        criar('h2', { classe: 'cartao__titulo', texto: `Lançamentos fora do quadro (${secretaria.pendentes.length})` }),
-        criar('p', { classe: 'cartao__descricao', texto: 'Registros abaixo do TOTAL na planilha de origem. Não são somados até serem incorporados ao quadro.' }),
-        tabela({
+        criar('div', {
+          classe: 'cartao__cabecalho',
+          filhos: [
+            criar('h2', { classe: 'cartao__titulo', texto: `Lançamentos fora do quadro (${pendentes.length})` }),
+            botao({ rotulo: '+ Novo lançamento fora do quadro', variante: 'secundario', testid: 'btn-novo-pendente', aoClicar: () => abrirFormularioLinha(secretaria, null, { modo: 'pendente' }) })
+          ]
+        }),
+        criar('p', { classe: 'cartao__descricao', texto: 'Rascunhos de lançamentos futuros. Não afetam indicadores, situação das fichas nem consultas até serem incorporados ao quadro.' }),
+        pendentes.length ? tabela({
           testid: 'tabela-pendentes',
           legenda: 'Lançamentos fora do quadro',
           colunas: [
@@ -683,14 +771,15 @@
               render: (l) => criar('div', {
                 classe: 'tabela__acoes',
                 filhos: [
-                  botao({ rotulo: 'Incorporar', tamanho: 'pequeno', variante: 'fantasma', testid: `btn-incorporar-${l.id}`, aoClicar: () => { store.incorporarPendente(secretaria.codigo, l.id); toast.sucesso('Lançamento incorporado ao quadro.'); } }),
-                  botao({ rotulo: 'Excluir', tamanho: 'pequeno', variante: 'perigo-texto', testid: `btn-excluir-pendente-${l.id}`, aoClicar: () => excluirLinha(secretaria, l) })
+                  botao({ rotulo: 'Incorporar', tamanho: 'pequeno', variante: 'fantasma', testid: `btn-incorporar-${l.id}`, attrs: { 'aria-label': `Incorporar ao quadro: ${descreve(l)}` }, aoClicar: () => incorporarPendente(secretaria, l) }),
+                  botao({ rotulo: 'Editar', tamanho: 'pequeno', variante: 'fantasma', testid: `btn-editar-pendente-${l.id}`, attrs: { 'aria-label': `Editar lançamento fora do quadro: ${descreve(l)}` }, aoClicar: () => abrirFormularioLinha(secretaria, l, { modo: 'pendente' }) }),
+                  botao({ rotulo: 'Excluir', tamanho: 'pequeno', variante: 'perigo-texto', testid: `btn-excluir-pendente-${l.id}`, attrs: { 'aria-label': `Excluir lançamento fora do quadro: ${descreve(l)}` }, aoClicar: () => excluirPendente(secretaria, l) })
                 ]
               })
             }
           ],
-          linhas: secretaria.pendentes
-        })
+          linhas: pendentes
+        }) : alerta({ nivel: 'info', testid: 'secretaria-sem-pendentes', mensagem: 'Nenhum lançamento fora do quadro registrado.' })
       ]
     });
   }
@@ -813,8 +902,7 @@
       regiaoDinamica
     );
     atualizar();
-    const pendentes = secaoPendentes(secretaria);
-    if (pendentes) container.append(pendentes);
+    container.append(secaoPendentes(secretaria));
 
     contexto = { codigo, regiao: regiaoDinamica, atualizar };
   }

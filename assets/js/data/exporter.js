@@ -63,10 +63,20 @@
     return CAMPOS_EXPORTACAO.map((c) => (c.tipo === 'moeda' ? Number(linha[c.chave]) || 0 : linha[c.chave]));
   }
 
-  /** Aplica o filtro (período/busca) a uma secretaria, sem alterar o original. */
-  function aplicarFiltro(secretaria, filtro) {
-    if (!filtroAtivo(filtro)) return secretaria;
-    return { ...secretaria, linhas: filtrarLinhas(secretaria.linhas, filtro), pendentes: [], folha: 0 };
+  /**
+   * Aplica o filtro (período/busca) a uma secretaria, sem alterar o original.
+   * Os lançamentos fora do quadro seguem o mesmo filtro (ou são omitidos se
+   * `incluirPendentes` for falso); com filtro, a Folha não é exportada.
+   */
+  function aplicarFiltro(secretaria, filtro, incluirPendentes = true) {
+    const ativo = filtroAtivo(filtro);
+    const filtrar = (linhas) => (ativo ? filtrarLinhas(linhas, filtro) : linhas);
+    return {
+      ...secretaria,
+      linhas: filtrar(secretaria.linhas),
+      pendentes: incluirPendentes ? filtrar(secretaria.pendentes) : [],
+      folha: ativo ? 0 : secretaria.folha
+    };
   }
 
   /**
@@ -162,11 +172,11 @@
   }
 
   /** Tabela plana (uma linha por despesa) — usada no CSV e no XLSX simples. */
-  function montarTabelaPlana(secretarias, filtro = {}) {
+  function montarTabelaPlana(secretarias, filtro = {}, incluirPendentes = true) {
     const cabecalho = ['U.O.', 'Secretaria', ...CAMPOS_EXPORTACAO.map((c) => c.rotulo), 'Folha (secretaria)', 'Tipo'];
     const aoa = [cabecalho];
     secretarias.forEach((original) => {
-      const s = aplicarFiltro(original, filtro);
+      const s = aplicarFiltro(original, filtro, incluirPendentes);
       s.linhas.forEach((l) => aoa.push([s.codigo, s.nome, ...linhaParaArray(l), s.folha, 'Quadro']));
       s.pendentes.forEach((l) => aoa.push([s.codigo, s.nome, ...linhaParaArray(l), s.folha, 'Fora do quadro']));
     });
@@ -232,11 +242,13 @@
    * @param {'base'|'consolidado'|'secretaria'} opcoes.escopo
    * @param {string} [opcoes.codigo] secretaria (escopo 'secretaria')
    * @param {Object} [opcoes.filtro] { periodo }
+   * @param {boolean} [opcoes.incluirPendentes=true] exporta os lançamentos fora do quadro
+   *        (não somados; o consolidado nunca os inclui)
    * @param {Array}  opcoes.secretarias
    * @param {string} [opcoes.atualizadoEm]
    * @returns {{blob:Blob, nomeArquivo:string}}
    */
-  function gerarArquivo({ formato, escopo, codigo, filtro = {}, secretarias, atualizadoEm }) {
+  function gerarArquivo({ formato, escopo, codigo, filtro = {}, incluirPendentes = true, secretarias, atualizadoEm }) {
     if (!MIME[formato]) throw new Error(`Formato "${formato}" não suportado.`);
     const data = atualizadoEm || dataBR(new Date());
     const sufixoFiltro = filtroAtivo(filtro) ? `-${slug(filtro.periodo || filtro.busca)}` : '';
@@ -252,7 +264,7 @@
     const nomeArquivo = `${base}${sufixoFiltro}-${slug(dataBR(new Date()))}.${formato}`;
 
     if (formato === 'csv') {
-      const aoa = escopo === 'consolidado' ? montarConsolidado(alvo, filtro) : montarTabelaPlana(alvo, filtro);
+      const aoa = escopo === 'consolidado' ? montarConsolidado(alvo, filtro) : montarTabelaPlana(alvo, filtro, incluirPendentes);
       return { blob: new Blob([gerarCsv(aoa)], { type: MIME.csv }), nomeArquivo };
     }
 
@@ -264,7 +276,7 @@
       wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, criarAba(XLSX, montarConsolidado(alvo, filtro), {}, [8, 55, 16, 16, 16, 16, 16]), 'Consolidado');
     } else {
-      wb = montarWorkbookBase(XLSX, alvo.map((s) => aplicarFiltro(s, filtro)), data);
+      wb = montarWorkbookBase(XLSX, alvo.map((s) => aplicarFiltro(s, filtro, incluirPendentes)), data);
     }
     const bytes = XLSX.write(wb, { bookType: formato === 'xls' ? 'biff8' : 'xlsx', type: 'array' });
     return { blob: new Blob([bytes], { type: MIME[formato] }), nomeArquivo };

@@ -148,13 +148,28 @@
     };
   }
 
+  /**
+   * Índice onde uma linha da ficha deve entrar no quadro: logo após a última
+   * linha da mesma ficha (mantém o agrupamento); ficha nova entra antes da
+   * primeira ficha numericamente maior; senão, no fim.
+   */
+  function posicaoNoQuadro(linhas, ficha) {
+    const alvo = texto(ficha);
+    for (let i = linhas.length - 1; i >= 0; i -= 1) {
+      if (linhas[i].ficha === alvo) return i + 1;
+    }
+    const numero = Number(alvo);
+    const maior = Number.isNaN(numero) ? -1 : linhas.findIndex((l) => Number(l.ficha) > numero);
+    return maior < 0 ? linhas.length : maior;
+  }
+
   /** Ordena secretarias pelo código (02.01, 02.02, ...). */
   function ordenarSecretarias(lista) {
     return [...lista].sort((a, b) => a.codigo.localeCompare(b.codigo, 'pt-BR', { numeric: true }));
   }
 
   App.data.schema = Object.freeze({
-    gerarId, criarLinha, criarSecretaria, ordenarSecretarias,
+    gerarId, criarLinha, criarSecretaria, ordenarSecretarias, posicaoNoQuadro,
     normalizarUe, normalizarFonte, normalizarDespesa, chaveDespesa,
     definirReferencia, obterReferencia, anexarAnotacao
   });

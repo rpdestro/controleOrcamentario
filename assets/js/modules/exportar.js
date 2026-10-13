@@ -26,7 +26,7 @@
     { valor: 'csv', rotulo: 'CSV (;) para Excel' }
   ]);
 
-  const selecao = { formato: 'xlsx', escopo: 'base', codigo: '', periodo: '' };
+  const selecao = { formato: 'xlsx', escopo: 'base', codigo: '', periodo: '', incluirPendentes: true };
 
   /** Grupo de botões de rádio acessível (fieldset + legend). */
   function grupoRadio({ nome, legenda, opcoes, valor, testid }) {
@@ -73,8 +73,21 @@
         }),
         campo({
           id: 'exp-periodo', nome: 'periodo', rotulo: 'Filtrar por competência (mês)', tipo: 'select', valor: selecao.periodo, testid: 'select-exportar-periodo',
-          dica: 'Com filtro, a Folha e os lançamentos fora do quadro não são exportados.',
+          dica: 'Com filtro, a Folha não é exportada; os lançamentos fora do quadro seguem o mesmo filtro.',
           opcoes: [{ valor: '', rotulo: 'Todas as competências' }, ...periodos]
+        }),
+        criar('div', {
+          classe: 'form__campo form__campo--largo',
+          filhos: [
+            criar('label', {
+              classe: 'form__radio',
+              filhos: [
+                criar('input', { testid: 'check-exportar-pendentes', attrs: { type: 'checkbox', name: 'incluirPendentes', checked: selecao.incluirPendentes } }),
+                criar('span', { texto: 'Incluir lançamentos fora do quadro' })
+              ]
+            }),
+            criar('span', { classe: 'form__dica', texto: 'Exportados identificados como "fora do quadro", sem somar nos totais. Não se aplica ao Consolidado.' })
+          ]
         }),
         criar('div', { classe: 'form__acoes form__campo--largo', filhos: [botao({ rotulo: 'Exportar arquivo', variante: 'primario', tipo: 'submit', testid: 'btn-exportar' })] })
       ]
@@ -85,6 +98,10 @@
       const seletor = form.elements.codigo;
       seletor.disabled = form.elements.escopo.value !== 'secretaria';
       seletor.closest('.form__campo').classList.toggle('form__campo--desabilitado', seletor.disabled);
+      // O consolidado é um quadro de totais: os lançamentos fora do quadro nunca entram nele.
+      const pendentes = form.elements.incluirPendentes;
+      pendentes.disabled = form.elements.escopo.value === 'consolidado';
+      pendentes.closest('.form__campo').classList.toggle('form__campo--desabilitado', pendentes.disabled);
     };
     form.elements.escopo.addEventListener('change', sincronizar);
     sincronizar();
@@ -95,7 +112,8 @@
         formato: form.elements.formato.value,
         escopo: form.elements.escopo.value,
         codigo: form.elements.codigo.value,
-        periodo: form.elements.periodo.value
+        periodo: form.elements.periodo.value,
+        incluirPendentes: form.elements.incluirPendentes.checked
       };
       if (!aplicarErros(form, validar(valores))) return;
       Object.assign(selecao, valores);
@@ -106,6 +124,7 @@
           escopo: valores.escopo,
           codigo: valores.codigo,
           filtro: { periodo: valores.periodo },
+          incluirPendentes: valores.incluirPendentes,
           secretarias: store.getSecretarias(),
           atualizadoEm: store.getEstado().meta.atualizadoEm
         });

@@ -20,7 +20,7 @@
 
   const config = App.core.config;
   const eventos = App.core.events;
-  const { criarSecretaria, criarLinha, ordenarSecretarias, definirReferencia } = App.data.schema;
+  const { criarSecretaria, criarLinha, ordenarSecretarias, definirReferencia, posicaoNoQuadro } = App.data.schema;
   const periodo = App.utils.periodo;
   const movimentacoes = App.data.movimentacoes;
   const integracao = App.data.fiorilli;
@@ -369,13 +369,40 @@
     confirmarAlteracao('linha:removida');
   }
 
-  /** Move um lançamento "fora do quadro" para o quadro de despesas (passa a somar). */
-  function incorporarPendente(codigo, id) {
+  /*
+   * Lançamentos "fora do quadro" (rascunhos): ficam somente em `pendentes`,
+   * que nenhum cálculo lê. Só passam a valer como dado oficial ao serem incorporados.
+   */
+
+  /** Inclui (sem id) ou atualiza (com id) um lançamento fora do quadro. */
+  function salvarPendente(codigo, dados) {
+    const secretaria = exigirSecretaria(codigo);
+    const indice = secretaria.pendentes.findIndex((l) => l.id === dados.id);
+    const linha = criarLinha({ ...(indice >= 0 ? secretaria.pendentes[indice] : {}), ...dados });
+    if (indice >= 0) secretaria.pendentes.splice(indice, 1, linha);
+    else secretaria.pendentes.push(linha);
+    confirmarAlteracao(indice >= 0 ? 'pendente:editado' : 'pendente:incluido');
+    return linha;
+  }
+
+  function removerPendente(codigo, id) {
+    const secretaria = exigirSecretaria(codigo);
+    secretaria.pendentes = secretaria.pendentes.filter((l) => l.id !== id);
+    confirmarAlteracao('pendente:removido');
+  }
+
+  /**
+   * Move um lançamento fora do quadro para o quadro de despesas (passa a somar),
+   * junto às linhas da mesma ficha. `dados` (opcional) são as correções feitas
+   * na revisão antes de incorporar — aplicadas na mesma alteração.
+   */
+  function incorporarPendente(codigo, id, dados = null) {
     const secretaria = exigirSecretaria(codigo);
     const pendente = secretaria.pendentes.find((l) => l.id === id);
     if (!pendente) return;
+    const linha = dados ? criarLinha({ ...pendente, ...dados, id }) : pendente;
     secretaria.pendentes = secretaria.pendentes.filter((l) => l.id !== id);
-    secretaria.linhas.push(pendente);
+    secretaria.linhas.splice(posicaoNoQuadro(secretaria.linhas, linha.ficha), 0, linha);
     confirmarAlteracao('pendente:incorporado');
   }
 
@@ -467,7 +494,7 @@
     getTransferencias, getSecretariasProjetadas, getSecretariaProjetada,
     substituirDados, aplicarFiorilli, descartarFiorilli, getCamadaFiorilli, temCamadaFiorilli, fichaNoFiorilli, getInfoFiorilli,
     recalcularReservas, getColunasFiorilli, definirColunasFiorilli, getFiltroReservas, definirFiltroReservas,
-    salvarLinha, removerLinha, incorporarPendente, definirFolha,
+    salvarLinha, removerLinha, salvarPendente, removerPendente, incorporarPendente, definirFolha,
     adicionarSecretaria, atualizarSecretaria, removerSecretaria, limparTudo,
     transferir, desfazerTransferencia, limparTransferencias
   });
