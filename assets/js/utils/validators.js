@@ -68,19 +68,31 @@
   }
 
   /**
-   * Valida um lançamento "fora do quadro" (rascunho). Ficha, U.E, FR, Cód. Despesa,
-   * Descrição e Essencial são obrigatórios; o período não é validado (a exigência
-   * de período vale somente ao incorporar, via validarLinha).
+   * Valida um lançamento "fora do quadro" (rascunho) ao salvar (v1.7): nenhum campo
+   * é obrigatório. Só os valores numéricos precisam ser legíveis, senão virariam 0
+   * sem aviso. As regras oficiais valem ao incorporar (validarIncorporacao).
    * @param {Object} linha
    */
   function validarPendente(linha) {
-    const texto = (v) => String(v === null || v === undefined ? '' : v).trim();
-    const { periodoInicio, periodoFim, ...semPeriodo } = linha;
-    const { erros } = validarLinha(semPeriodo);
-    delete erros.observacao;
+    const erros = {};
+    config.CAMPOS_NUMERICOS.forEach((campo) => {
+      if (Number.isNaN(paraNumero(linha[campo]))) erros[campo] = 'Valor numérico inválido. Ex.: 1.234,56';
+    });
+    return resultado(erros);
+  }
 
+  /**
+   * Valida um rascunho para incorporá-lo ao quadro oficial: as regras da despesa
+   * oficial (validarLinha, incluindo o período quando há Essencial) mais
+   * Descrição e Essencial (maior que zero) obrigatórios.
+   * @param {Object} linha
+   */
+  function validarIncorporacao(linha) {
+    const texto = (v) => String(v === null || v === undefined ? '' : v).trim();
+    const { erros } = validarLinha({ periodoInicio: '', periodoFim: '', ...linha });
     if (!texto(linha.descricao)) erros.descricao = 'Informe a descrição.';
-    if (!texto(linha.essencial)) erros.essencial = 'Informe o valor Essencial.';
+    const essencial = paraNumero(linha.essencial);
+    if (!erros.essencial && !(essencial > 0)) erros.essencial = 'Informe o valor Essencial (maior que zero).';
     return resultado(erros);
   }
 
@@ -124,5 +136,5 @@
     return resultado({});
   }
 
-  App.utils.validators = Object.freeze({ validarLinha, validarPendente, validarSecretaria, validarValor, validarArquivo, PADROES });
+  App.utils.validators = Object.freeze({ validarLinha, validarPendente, validarIncorporacao, validarSecretaria, validarValor, validarArquivo, PADROES });
 })(window.OrcApp);

@@ -10,7 +10,8 @@
  *
  * Linha { id, ficha, ue, fonte, despesa, descricao, observacao,
  *         periodoInicio ('AAAA-MM'), periodoFim ('AAAA-MM'), anotacao,
- *         essencial, antes, reserva, saldoFicha }
+ *         essencial, antes, reserva, saldoFicha, novo? }
+ * (novo: só em rascunhos "fora do quadro" recém-criados — v1.7.)
  * (A coluna "Cortes" da planilha é ignorada.)
  *
  * Regras de negócio:
@@ -131,6 +132,8 @@
       const n = paraNumero(parcial[campo]);
       linha[campo] = Number.isNaN(n) ? 0 : arredondar(n);
     });
+    // v1.7: rascunho recém-criado, ainda não salvo novamente (indicador no menu lateral).
+    if (parcial.novo === true) linha.novo = true;
     return linha;
   }
 

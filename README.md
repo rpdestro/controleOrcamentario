@@ -1,4 +1,4 @@
-# Planejamento e Orçamento — Prefeitura Municipal de Botucatu · v1.6
+# Planejamento e Orçamento — Prefeitura Municipal de Botucatu · v1.7
 
 Aplicação web para administrar as **demandas financeiras das Secretarias por período**, usando planilhas Excel como base de dados e o **Sistema Fiorilli** como fonte oficial de saldos.
 
@@ -20,12 +20,12 @@ Aplicação web para administrar as **demandas financeiras das Secretarias por p
 | Módulo | O que faz |
 |---|---|
 | **Painel** | Indicadores gerais, situação da última atualização Fiorilli, gráfico de resultado por secretaria, quadro consolidado (igual à aba GERAL, com filtros de coluna) e essencial por período. |
-| **Secretarias** | Uma tela por Unidade Orçamentária: busca, filtro por competência, **filtros de coluna estilo Excel**, inclusão/edição/exclusão de despesas, Folha, consulta de demanda (texto de despacho), lançamentos "fora do quadro" (rascunhos que não entram em nenhum cálculo: incluir, editar, excluir e incorporar ao quadro), **situação de cada ficha** (Positivo / Déficit / Atende, com botões de filtro e ordenação) e **transferência de recursos entre fichas** (seção 6-A). |
+| **Secretarias** | Uma tela por Unidade Orçamentária: busca, filtro por competência, **filtros de coluna estilo Excel**, inclusão/edição/exclusão de despesas, Folha, consulta de demanda (texto de despacho), lançamentos "fora do quadro" (rascunhos que não entram em nenhum cálculo: incluir, editar, excluir e incorporar ao quadro; seção 6-B), **situação de cada ficha** (Positivo / Déficit / Atende, com botões de filtro e ordenação) e **transferência de recursos entre fichas** (seção 6-A). |
 | **Relatórios** | Relatório oficial com o brasão da Prefeitura e páginas numeradas. Tipos: **Consolidado Geral** (quadro + gráfico "Resultado por secretaria", filtro por competência), **Gestão de movimentações** (transferências entre fichas e fichas com saldo alterado, filtro por datas e secretaria) ou **Completo**. Botão **Imprimir / PDF** (A4 paisagem). |
 | **Exportar** | XLSX, XLS ou CSV: base completa, consolidado ou uma secretaria, com filtro de competência. A coluna "Antes" (Valor Anterior) não é exportada (v1.5). |
 | **Configurações** | Secretarias (incluir, editar, remover), **filtro de reservas** (processos e fontes em caixas de seleção, com recálculo imediato das Reservas), **colunas do relatório Fiorilli** e dados locais (planilha e relatório Fiorilli em uso, **Descartar saldos do Fiorilli**). |
 
-O **brasão da Prefeitura** (`assets/img/brasao.png`), os botões **🌙 Modo escuro** e a **versão (v1.6)** ficam no cabeçalho.
+O **brasão da Prefeitura** (`assets/img/brasao.png`), os botões **🌙 Modo escuro** e a **versão (v1.7)** ficam no cabeçalho.
 
 ---
 
@@ -244,6 +244,28 @@ Em **Relatórios → Tipo: Gestão de movimentações** (ou **Completo**):
 
 ---
 
+## 6-B. Lançamentos "fora do quadro" (v1.7):
+
+São **rascunhos** de lançamentos futuros, guardados no card "Lançamentos fora do quadro" de cada secretaria. Enquanto forem rascunhos, **não entram em nenhum cálculo** (indicadores, situação das fichas, consulta de demanda, transferências, consolidado).
+
+**Regras:**
+1. **Salvar rascunho:** nenhum campo é obrigatório e os formatos não são conferidos. A única verificação é a dos **valores numéricos**: um texto que não é número (ex.: "abc" no Essencial) é recusado, senão viraria 0 sem aviso.
+2. **Incorporar ao quadro:** valem as regras da despesa oficial. **Ficha, U.E, FR, Cód. Despesa, Descrição e Essencial (maior que zero)** são obrigatórios, nos formatos padrão, e o **Período** é obrigatório quando há Essencial.
+3. Se faltar algo, a incorporação **não acontece**: abre a janela "Revisar e incorporar" com os campos destacados. Ao corrigir e clicar em **Salvar e incorporar**, o lançamento entra no quadro logo após as linhas da mesma ficha.
+
+Na tabela de rascunhos, a coluna **Status** mostra:
+- **Novo**: rascunho criado e ainda não salvo novamente;
+- **Incompleto**: rascunho que ainda não cumpre as regras para incorporar.
+
+**Indicador no menu lateral:** ao lado de cada secretaria aparece um contador amarelo com a quantidade de lançamentos fora do quadro **novos**.
+- O contador **some** quando o rascunho é salvo novamente pelo botão **Editar** (com ou sem alteração), incorporado ou excluído.
+- A marca "novo" fica guardada **só no navegador**: não vai para o Excel exportado.
+- Rascunhos lidos de uma planilha importada **não** são marcados como novos.
+
+Rascunhos sem Ficha e sem Cód. Despesa (só com Descrição ou Essencial) continuam sendo lidos como rascunhos ao reimportar a base exportada.
+
+---
+
 ## 7. Arquitetura:
 
 Aplicação 100% front-end, modular e sem build. HTML, CSS e JS ficam separados. O único global é `window.OrcApp`, por isso funciona via `file://`.
@@ -286,7 +308,7 @@ controleOrcamentario/
 │       │   ├── componentes.js · modal.js · toast.js · router.js (atualização parcial) · nav.js
 │       ├── modules/   painel · secretaria · transferencia · fiorilli · importar · relatorios · exportar · configuracoes
 │       └── app.js                 inicialização (exibe a versão)
-└── tests/            index.html · runner/ · specs/ (utils, dados, v11, v14, v15, v16)
+└── tests/            index.html · runner/ · specs/ (utils, dados, v11, v14, v15, v16, v17)
 ```
 
 ---
@@ -311,9 +333,10 @@ controleOrcamentario/
 | Colunas do Fiorilli | `input-fiorilli-coluna-<campo>`, `btn-salvar-colunas-fiorilli` |
 | Camadas (v1.6) | `importar-fiorilli-mantido`, `importar-sem-fiorilli`, `importar-fiorilli-desatualizado`, `importar-aviso-transferencias`, `importar-descartar-transferencias`, `fiorilli-aviso-data`, `painel-fiorilli-desatualizado`, `btn-descartar-fiorilli`, `modal-descartar-fiorilli`, `config-dados-<campo>` |
 | Transferência (v1.4) | `btn-transferir-<idLinha>`, `modal-transferencia`, `transferencia-origem`, `input-transferencia-busca`, `select-transferencia-destino`, `input-transferencia-saldoFicha`, `input-transferencia-reserva`, `btn-transferencia-total-<campo>`, `select-transferencia-instrumento`, `input-transferencia-motivo`, `transferencia-previa`, `check-transferencia-ciente`, `btn-transferencia-confirmar` |
+| Fora do quadro (v1.7) | `secretaria-pendentes`, `btn-novo-pendente`, `tabela-pendentes`, `pendente-novo-<id>`, `pendente-incompleto-<id>`, `btn-incorporar-<id>`, `btn-editar-pendente-<id>`, `btn-excluir-pendente-<id>`, `modal-incorporar-pendente`, `nav-secretaria-<codigo>-novos` |
 | Situação e histórico (v1.4) | `situacao-ficha-<ficha>`, `kpi-sec-alerta`, `secretaria-movimentacoes`, `btn-desfazer-transferencia-<id>`, `painel-movimentacoes`, `btn-descartar-transferencias` |
 
-- **Testes:** abra `tests/index.html`. São **166 testes**, todos passando. A v1.6 acrescenta `v16.spec.js`, que cobre: a mesma base em qualquer ordem de carregamento, a combinação planilha + Fiorilli, as fichas incluídas, a migração dos dados da v1.5 e a comparação de datas. Os testes de "aplicar" da v1.1 e da v1.5 passam a usar `combinar`. A v1.5 acrescenta `v15.spec.js` (exportação sem "Antes" e letras das fórmulas, composição e recálculo da Reserva, relatório de gestão) e atualiza os testes de situação para os três níveis. A v1.4 acrescenta 25 testes: margens de situação, projeção dos saldos, validação (saldo insuficiente, valores, destino), simulação, movimentações órfãs e desfazer encadeado. A v1.1 e a v1.2 acrescentam:
+- **Testes:** abra `tests/index.html`. São **204 testes**, todos passando. A v1.7 acrescenta `v17.spec.js`, que cobre: rascunho livre ao salvar, regras para incorporar, marca "novo", rascunhos fora dos cálculos, posição ao incorporar e exportação/reimportação dos rascunhos (inclusive incompletos). A v1.6 acrescenta `v16.spec.js`, que cobre: a mesma base em qualquer ordem de carregamento, a combinação planilha + Fiorilli, as fichas incluídas, a migração dos dados da v1.5 e a comparação de datas. Os testes de "aplicar" da v1.1 e da v1.5 passam a usar `combinar`. A v1.5 acrescenta `v15.spec.js` (exportação sem "Antes" e letras das fórmulas, composição e recálculo da Reserva, relatório de gestão) e atualiza os testes de situação para os três níveis. A v1.4 acrescenta 25 testes: margens de situação, projeção dos saldos, validação (saldo insuficiente, valores, destino), simulação, movimentações órfãs e desfazer encadeado. A v1.1 e a v1.2 acrescentam:
   - padrão de período, com os textos reais da planilha;
   - filtros de coluna;
   - normalizações do Fiorilli;
@@ -338,7 +361,8 @@ Sem a biblioteca, só os arquivos **CSV** funcionam. O relatório de reservas do
 
 | Versão | Data | Mudanças |
 |---|---|---|
-| **v1.6** | 08/10/2026 | **Planilha e Fiorilli em camadas separadas** (seção 3-A): a ordem "Importar planilha" / "Atualizar Fiorilli" deixa de alterar o resultado, e reimportar a planilha não apaga os saldos oficiais. Base exibida = combinação das camadas (função pura testada). Formulário com campos oficiais **somente leitura** quando a ficha está no Fiorilli. **Origem dos saldos** no Painel, avisos de **datas desatualizadas** (planilha × relatório), opção de **descartar transferências** ao importar, aviso de movimentações anteriores à importação, **Descartar saldos do Fiorilli** em Configurações. Migração automática dos dados da v1.5 (formato de dados 2). Backup da v1.5 em `bkp/v1.5-bkp.zip`. |
+| **v1.7** | 22/10/2026 | **Lançamentos "fora do quadro"** (seção 6-B): rascunho salvo **sem nenhum campo obrigatório** (só valores numéricos precisam ser legíveis); as regras oficiais (campos obrigatórios, formatos, Essencial maior que zero e período) valem **ao incorporar**, que fica bloqueado até os campos estarem corretos. Coluna **Status** (Novo / Incompleto). **Indicador no menu lateral** com a quantidade de rascunhos novos por secretaria, que some ao salvar o rascunho novamente. Rascunhos sem ficha e sem despesa são preservados na exportação/reimportação. |
+| v1.6 | 08/10/2026 | **Planilha e Fiorilli em camadas separadas** (seção 3-A): a ordem "Importar planilha" / "Atualizar Fiorilli" deixa de alterar o resultado, e reimportar a planilha não apaga os saldos oficiais. Base exibida = combinação das camadas (função pura testada). Formulário com campos oficiais **somente leitura** quando a ficha está no Fiorilli. **Origem dos saldos** no Painel, avisos de **datas desatualizadas** (planilha × relatório), opção de **descartar transferências** ao importar, aviso de movimentações anteriores à importação, **Descartar saldos do Fiorilli** em Configurações. Migração automática dos dados da v1.5 (formato de dados 2). Backup da v1.5 em `bkp/v1.5-bkp.zip`. |
 | v1.5 | 07/10/2026 | **Situação das fichas em três níveis**: Positivo (verde), Déficit (vermelho, inclui zeradas e mostra quanto falta) e Atende (azul, disponível = Essencial). **Secretarias**: botões de filtro por situação e ordenação. **Filtro de reservas com caixas de seleção** (processos 001.003, 001.003.1, 001.003.2, 001.003.3, 001.005; fontes 1, 2, 3, 5, 8) em Configurações e na atualização Fiorilli, com **recálculo imediato** das Reservas (composição por processo × fonte guardada na atualização, com prévia do impacto). **Relatório de gestão** das movimentações entre fichas e das fichas com saldo alterado; páginas numeradas dinamicamente. **Exportação sem a coluna "Antes"** (XLS/XLSX) e "Valor Anterior" (CSV); letras das fórmulas derivadas da posição das colunas. |
 | v1.4 | 07/10/2026 | **Transferência de recursos entre fichas** (da mesma ou de outra secretaria), movendo Saldo Ficha e/ou Reserva, com prévia antes → depois, bloqueio de saldo negativo e ciência obrigatória quando a origem fica crítica. **Livro de movimentações**: os saldos oficiais são preservados, as telas mostram o saldo projetado, e o histórico tem Desfazer. **Situação das fichas** (Zerada, Déficit, Crítico < 10%, Atenção < 30%, Regular) com selos, borda colorida, filtro e o indicador "Fichas em alerta". **Atualização parcial e animada** da tela após a transferência. A coluna "Cortes" deixa de ser lida e exportada. |
 | v1.3 | 06/10/2026 | A aplicação substitui a planilha do dia a dia ("Planilha Léo Outubro atualizada.xlsx"). **Brasão da Prefeitura** no cabeçalho, no ícone da aba e nos relatórios. **Relatório em duas páginas**: Consolidado Geral + gráfico "Resultado por secretaria" (os demais tipos de relatório e os campos de assinatura foram removidos). Módulo Configurações (colunas do Fiorilli e filtro de reservas) testado com `download-06-10-2026.xls`. |

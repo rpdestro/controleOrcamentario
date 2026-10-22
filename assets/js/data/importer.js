@@ -170,7 +170,12 @@
       }
 
       const semIdentificacao = vazio(linha[colunas.ficha]) && vazio(linha[colunas.despesa]);
-      if (semIdentificacao) {
+      // v1.7: abaixo do TOTAL, um rascunho pode estar sem ficha e sem despesa
+      // (basta ter Descrição ou Essencial). O título do bloco não é lançamento.
+      const rascunhoIncompleto = secao === 'pendentes' && semIdentificacao
+        && !normalizarTexto(linha[colunas.descricao]).startsWith('lancamentos fora do quadro')
+        && ['descricao', 'essencial'].some((campo) => campo in colunas && !vazio(linha[colunas[campo]]));
+      if (semIdentificacao && !rascunhoIncompleto) {
         // Linha de SUBTOTAL (logo após os dados): guarda para conferência.
         if (secao === 'dados' && 'essencial' in colunas && !vazio(linha[colunas.essencial])) {
           ['essencial', 'reserva', 'saldoFicha'].forEach((campo) => {

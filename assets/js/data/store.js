@@ -374,11 +374,15 @@
    * que nenhum cálculo lê. Só passam a valer como dado oficial ao serem incorporados.
    */
 
-  /** Inclui (sem id) ou atualiza (com id) um lançamento fora do quadro. */
+  /**
+   * Inclui (sem id) ou atualiza (com id) um lançamento fora do quadro.
+   * v1.7: o rascunho incluído nasce "novo" (indicador no menu lateral); qualquer
+   * salvamento posterior retira a marca.
+   */
   function salvarPendente(codigo, dados) {
     const secretaria = exigirSecretaria(codigo);
     const indice = secretaria.pendentes.findIndex((l) => l.id === dados.id);
-    const linha = criarLinha({ ...(indice >= 0 ? secretaria.pendentes[indice] : {}), ...dados });
+    const linha = criarLinha({ ...(indice >= 0 ? secretaria.pendentes[indice] : {}), ...dados, novo: indice < 0 });
     if (indice >= 0) secretaria.pendentes.splice(indice, 1, linha);
     else secretaria.pendentes.push(linha);
     confirmarAlteracao(indice >= 0 ? 'pendente:editado' : 'pendente:incluido');
@@ -400,7 +404,7 @@
     const secretaria = exigirSecretaria(codigo);
     const pendente = secretaria.pendentes.find((l) => l.id === id);
     if (!pendente) return;
-    const linha = dados ? criarLinha({ ...pendente, ...dados, id }) : pendente;
+    const linha = criarLinha({ ...pendente, ...(dados || {}), id, novo: false });
     secretaria.pendentes = secretaria.pendentes.filter((l) => l.id !== id);
     secretaria.linhas.splice(posicaoNoQuadro(secretaria.linhas, linha.ficha), 0, linha);
     confirmarAlteracao('pendente:incorporado');

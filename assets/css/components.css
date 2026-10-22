@@ -106,6 +106,34 @@
   background: var(--cor-superficie-alt);
 }
 
+/* Link com indicador (v1.7): texto com reticências + contador fixo à direita. */
+.nav__link:has(.nav__indicador) {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+}
+
+.nav__link:has(.nav__indicador) .nav__texto {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Lançamentos fora do quadro novos na secretaria */
+.nav__indicador {
+  flex: none;
+  min-width: 1.4em;
+  padding: 0 var(--esp-1);
+  border-radius: 999px;
+  background: var(--cor-acento);
+  color: #1d2733;
+  font-size: var(--tam-xs);
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+}
+
 .nav__link--ativo {
   background: var(--cor-primaria-clara);
   color: var(--cor-primaria);
@@ -322,6 +350,12 @@ details[open] > summary.cartao__titulo {
 .selo--aviso {
   background: var(--cor-aviso-fundo);
   color: var(--cor-aviso);
+}
+
+/* Rascunho novo (v1.7): mesma cor do indicador do menu lateral */
+.selo--novo {
+  background: var(--cor-acento);
+  color: #1d2733;
 }
 
 /* Situação orçamentária da ficha (v1.5): ícone + texto, não só cor.

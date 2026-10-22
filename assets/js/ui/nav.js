@@ -11,14 +11,26 @@
 
   let raiz = null;
 
-  function link({ caminho, rotulo, testid, detalhe }) {
+  /** Indicador (v1.7): quantidade de lançamentos fora do quadro novos da secretaria. */
+  function indicadorNovos(quantidade, testid) {
+    if (!quantidade) return null;
+    const descricao = quantidade === 1 ? '1 novo lançamento fora do quadro' : `${quantidade} novos lançamentos fora do quadro`;
+    return criar('span', {
+      classe: 'nav__indicador',
+      testid: `${testid}-novos`,
+      texto: String(quantidade),
+      attrs: { title: descricao, 'aria-label': descricao }
+    });
+  }
+
+  function link({ caminho, rotulo, testid, detalhe, novos = 0 }) {
     return criar('li', {
       classe: 'nav__item',
       filhos: [criar('a', {
         classe: 'nav__link',
         testid,
         attrs: { href: `#${caminho}`, 'data-caminho': caminho, title: detalhe || rotulo },
-        filhos: [criar('span', { classe: 'nav__texto', texto: rotulo })]
+        filhos: [criar('span', { classe: 'nav__texto', texto: rotulo }), indicadorNovos(novos, testid)].filter(Boolean)
       })]
     });
   }
@@ -47,7 +59,8 @@
         caminho: `/secretaria/${s.codigo}`,
         rotulo: `${s.codigo} · ${App.utils.format.nomeCurto(s.nome)}`,
         detalhe: s.nome,
-        testid: `nav-secretaria-${s.codigo}`
+        testid: `nav-secretaria-${s.codigo}`,
+        novos: s.pendentes.filter((l) => l.novo).length
       })), 'nav-grupo-secretarias')
     );
     marcarAtivo();

@@ -7,8 +7,8 @@
   'use strict';
 
   const { describe, it, expect } = TestRunner;
-  const { criarSecretaria, posicaoNoQuadro } = App.data.schema;
-  const { validarPendente, validarLinha } = App.utils.validators;
+  const { criarLinha, criarSecretaria, posicaoNoQuadro } = App.data.schema;
+  const { validarPendente, validarIncorporacao, validarLinha } = App.utils.validators;
   const calc = App.data.calculos;
   const mov = App.data.movimentacoes;
   const exp = App.data.exporter;
@@ -16,27 +16,69 @@
   const REF = { ano: 2026, mes: 10 };
 
   const RASCUNHO = { ficha: '264', ue: '020602', fonte: '1', despesa: '3.3.90.30', descricao: 'Insumos odontológicos', essencial: '6.545,69' };
+  const COMPLETO = { ...RASCUNHO, periodoInicio: '2026-10', periodoFim: '2026-12' };
 
-  describe('v1.7 — validação do rascunho', () => {
-    it('aceita rascunho completo sem período', () => {
-      expect(validarPendente(RASCUNHO).valido).toBe(true);
+  describe('v1.7 — rascunho livre ao salvar', () => {
+    it('aceita rascunho totalmente vazio', () => {
+      expect(validarPendente({}).valido).toBe(true);
     });
-    it('aceita rascunho com período estruturado vazio (sem validação de período)', () => {
-      expect(validarPendente({ ...RASCUNHO, periodoInicio: '', periodoFim: '' }).valido).toBe(true);
+    ['ficha', 'ue', 'fonte', 'despesa', 'descricao', 'essencial'].forEach((campo) => {
+      it(`aceita "${campo}" em branco`, () => {
+        expect(validarPendente({ ...RASCUNHO, [campo]: '  ' }).valido).toBe(true);
+      });
     });
-    it('a despesa oficial, com os mesmos dados, exige o período', () => {
+    it('aceita formatos fora do padrão (ex.: U.E com 3 dígitos)', () => {
+      expect(validarPendente({ ...RASCUNHO, ue: '123', despesa: 'x' }).valido).toBe(true);
+    });
+    it('aceita rascunho sem período e com Observação longa', () => {
+      expect(validarPendente({ ...RASCUNHO, periodoInicio: '', periodoFim: '', observacao: 'x'.repeat(400) }).valido).toBe(true);
+    });
+    it('só recusa valor numérico ilegível (senão viraria 0)', () => {
+      expect(validarPendente({ ...RASCUNHO, essencial: 'abc' }).erros.essencial).toBeTruthy();
+    });
+  });
+
+  describe('v1.7 — regras para incorporar ao quadro', () => {
+    it('aceita rascunho completo com período', () => {
+      expect(validarIncorporacao(COMPLETO).valido).toBe(true);
+    });
+    it('exige o período quando há Essencial (como a despesa oficial)', () => {
+      expect(validarIncorporacao(RASCUNHO).erros.periodoInicio).toBeTruthy();
       expect(validarLinha({ ...RASCUNHO, periodoInicio: '', periodoFim: '' }).erros.periodoInicio).toBeTruthy();
     });
     ['ficha', 'ue', 'fonte', 'despesa', 'descricao', 'essencial'].forEach((campo) => {
       it(`exige "${campo}"`, () => {
-        expect(validarPendente({ ...RASCUNHO, [campo]: '  ' }).erros[campo]).toBeTruthy();
+        expect(validarIncorporacao({ ...COMPLETO, [campo]: '  ' }).erros[campo]).toBeTruthy();
       });
     });
-    it('mantém o formato dos campos (ex.: U.E com 6 dígitos)', () => {
-      expect(validarPendente({ ...RASCUNHO, ue: '123' }).erros.ue).toBeTruthy();
+    it('exige Essencial maior que zero (rascunho salvo em branco fica com 0)', () => {
+      expect(validarIncorporacao({ ...COMPLETO, essencial: 0 }).erros.essencial).toBeTruthy();
     });
-    it('não valida a Observação (Período)', () => {
-      expect(validarPendente({ ...RASCUNHO, observacao: 'x'.repeat(400) }).valido).toBe(true);
+    it('mantém o formato dos campos (ex.: U.E com 6 dígitos)', () => {
+      expect(validarIncorporacao({ ...COMPLETO, ue: '123' }).erros.ue).toBeTruthy();
+    });
+    it('rascunho vazio salvo não pode ser incorporado', () => {
+      const salvo = criarLinha({});
+      expect(validarIncorporacao(salvo).valido).toBe(false);
+    });
+  });
+
+  describe('v1.7 — marca "novo" (indicador do menu lateral)', () => {
+    it('criarLinha mantém a marca somente quando verdadeira', () => {
+      expect(criarLinha({ ...RASCUNHO, novo: true }).novo).toBe(true);
+      expect('novo' in criarLinha({ ...RASCUNHO, novo: false })).toBe(false);
+      expect('novo' in criarLinha(RASCUNHO)).toBe(false);
+    });
+    it('a marca sobrevive ao recarregar os dados salvos', () => {
+      const sec = criarSecretaria({ codigo: '02.06', pendentes: [{ ...RASCUNHO, novo: true }] }, REF);
+      const relida = criarSecretaria(JSON.parse(JSON.stringify(sec)), REF);
+      expect(relida.pendentes[0].novo).toBe(true);
+    });
+    it('rascunhos importados da planilha não são marcados', () => {
+      const sec = criarSecretaria({ codigo: '02.06', pendentes: [{ id: 'p1', ...RASCUNHO, observacao: 'Out/2026' }] }, REF);
+      const { aoa } = exp.montarAbaSecretaria({ ...sec, pendentes: [{ ...sec.pendentes[0], novo: true }] }, '09/10/2026');
+      const relida = criarSecretaria({ ...imp.lerAbaSecretaria(aoa, '02.06'), codigo: '02.06' }, REF);
+      expect(relida.pendentes.filter((l) => l.novo).length).toBe(0);
     });
   });
 
@@ -98,6 +140,13 @@
       expect(relida.pendentes.map((l) => l.descricao)).toEqual(['Insumos odontológicos', 'Ração', 'Sem período']);
       expect(relida.linhas.length).toBe(1);
       expect(calc.totaisSecretaria(relida).essencial).toBe(100);
+    });
+    it('rascunho incompleto (sem ficha e sem despesa) volta como rascunho', () => {
+      const incompleta = criarSecretaria({ ...sec, pendentes: [{ id: 'p9', descricao: 'Só a ideia', essencial: '' }] }, REF);
+      const { aoa } = exp.montarAbaSecretaria(incompleta, '09/10/2026');
+      const relida = criarSecretaria({ ...imp.lerAbaSecretaria(aoa, '02.06'), codigo: '02.06' }, REF);
+      expect(relida.pendentes.map((l) => l.descricao)).toEqual(['Só a ideia']);
+      expect(relida.linhas.length).toBe(1);
     });
   });
 })(window.TestRunner, window.OrcApp);

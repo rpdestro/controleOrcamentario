@@ -115,7 +115,7 @@
 
   App.core.config = Object.freeze({
     APP_NOME: 'Planejamento e Orçamento',
-    APP_VERSAO: '1.6.0',
+    APP_VERSAO: '1.7.0',
     ORGAO: 'Prefeitura Municipal de Botucatu',
     LOGO: 'assets/img/brasao.png',
     STORAGE_KEY: 'orcamento-botucatu:v1',

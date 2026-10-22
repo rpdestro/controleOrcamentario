@@ -26,7 +26,7 @@
   const { kpi, varianteSinal, tabela, cabecalhoPagina, botao, campo, aplicarErros, resumoErros, alerta, estadoVazio, seloSituacao } = App.ui.componentes;
   const mov = App.data.movimentacoes;
   const animacao = App.ui.animacao;
-  const { validarLinha, validarPendente, validarValor } = App.utils.validators;
+  const { validarLinha, validarPendente, validarIncorporacao, validarValor } = App.utils.validators;
   const filtroTabela = App.utils.filtroTabela;
   const periodo = App.utils.periodo;
   const calculos = App.data.calculos;
@@ -156,23 +156,35 @@
   /**
    * Modos do formulário de linha:
    *  - quadro: despesa oficial (padrão);
-   *  - pendente: lançamento fora do quadro (rascunho; validação própria, sem período obrigatório);
+   *  - pendente: lançamento fora do quadro (rascunho livre: nenhum campo obrigatório, v1.7);
    *  - incorporar: revisão de um rascunho que não passou na validação oficial ao ser incorporado.
    */
   const MODOS_FORMULARIO = Object.freeze({
     quadro: { tituloNovo: 'Nova despesa', tituloEditar: (l) => `Editar despesa — ficha ${l.ficha}`, rotuloSalvar: 'Salvar' },
-    pendente: { tituloNovo: 'Novo lançamento fora do quadro', tituloEditar: (l) => `Editar lançamento fora do quadro — ficha ${l.ficha}`, rotuloSalvar: 'Salvar rascunho' },
-    incorporar: { tituloEditar: (l) => `Revisar e incorporar — ficha ${l.ficha}`, rotuloSalvar: 'Salvar e incorporar' }
+    pendente: { tituloNovo: 'Novo lançamento fora do quadro', tituloEditar: (l) => `Editar lançamento fora do quadro — ${rotuloFicha(l)}`, rotuloSalvar: 'Salvar rascunho' },
+    incorporar: { tituloEditar: (l) => `Revisar e incorporar — ${rotuloFicha(l)}`, rotuloSalvar: 'Salvar e incorporar' }
   });
   /** Campos oficiais (Fiorilli) que não fazem parte do rascunho. */
   const CAMPOS_FORA_DO_RASCUNHO = Object.freeze(['antes', 'reserva', 'saldoFicha']);
-  const OBRIGATORIOS_RASCUNHO = Object.freeze(['ficha', 'ue', 'fonte', 'despesa', 'descricao', 'essencial']);
+  /** Campos exigidos para incorporar o rascunho ao quadro (validarIncorporacao). */
+  const OBRIGATORIOS_INCORPORAR = Object.freeze(['ficha', 'ue', 'fonte', 'despesa', 'descricao', 'essencial']);
 
-  /** Erros do formulário conforme o modo (o rascunho incorporado também precisa cumprir as regras oficiais). */
+  /** O rascunho pode estar sem ficha ou sem descrição (v1.7). */
+  const rotuloFicha = (l) => (l.ficha ? `ficha ${l.ficha}` : '(sem ficha)');
+  const rotuloDescricao = (l) => l.descricao || '(sem descrição)';
+
+  /** Erros do formulário conforme o modo (o rascunho incorporado precisa cumprir as regras oficiais). */
   function validarFormulario(modo, valores) {
     if (modo === 'pendente') return validarPendente(valores).erros;
-    if (modo === 'incorporar') return { ...validarPendente(valores).erros, ...validarLinha(valores).erros };
+    if (modo === 'incorporar') return validarIncorporacao(valores).erros;
     return validarLinha(valores).erros;
+  }
+
+  /** Obrigatoriedade do campo no formulário: o rascunho é livre; a incorporação segue as regras oficiais. */
+  function campoObrigatorio(modo, c) {
+    if (modo === 'pendente') return false;
+    if (modo === 'incorporar') return OBRIGATORIOS_INCORPORAR.includes(c.chave);
+    return c.obrigatorio;
   }
 
   /**
@@ -204,15 +216,15 @@
         rotulo: c.rotulo,
         tipo: ['descricao', 'anotacao'].includes(c.chave) ? 'textarea' : 'text',
         valor: valorCampo(c),
-        obrigatorio: rascunho ? OBRIGATORIOS_RASCUNHO.includes(c.chave) : c.obrigatorio,
+        obrigatorio: campoObrigatorio(modo, c),
         testid: `input-linha-${c.chave}`,
         classeExtra: ['descricao', 'anotacao'].includes(c.chave) ? 'form__campo--largo' : '',
-        dica: {
+        dica: [{
           ue: 'Ex.: 020101 · oficial (Fiorilli)', despesa: 'Ex.: 3.3.90.30 · oficial (Fiorilli)',
           ficha: 'Oficial (Fiorilli)', fonte: 'Oficial (Fiorilli)', reserva: 'Oficial (Fiorilli)', saldoFicha: 'Oficial (Fiorilli)',
           essencial: 'Preenchido pelo usuário', descricao: 'Preenchido pelo usuário',
           anotacao: 'Notas livres (ex.: "PL 16 – transferir para ficha 730", "aguardando ata")'
-        }[c.chave],
+        }[c.chave], modo === 'pendente' && OBRIGATORIOS_INCORPORAR.includes(c.chave) ? 'exigido ao incorporar' : ''].filter(Boolean).join(' · '),
         attrs: c.tipo === 'moeda' ? { inputmode: 'decimal', placeholder: '0,00', autocomplete: 'off' } : { autocomplete: 'off' }
       })];
     });
@@ -713,13 +725,13 @@
   async function incorporarPendente(secretaria, linha) {
     const erros = validarFormulario('incorporar', linha);
     if (Object.keys(erros).length) {
-      toast.aviso('Revise os campos destacados antes de incorporar.');
+      toast.aviso('Preencha corretamente os campos obrigatórios destacados antes de incorporar.');
       abrirFormularioLinha(secretaria, linha, { modo: 'incorporar', errosIniciais: erros });
       return;
     }
     const confirmado = await modal.confirmar({
       titulo: 'Incorporar ao quadro',
-      mensagem: `Incorporar o lançamento da ficha ${linha.ficha} — "${linha.descricao}" (${moeda(linha.essencial)}) ao quadro oficial? O valor passará a compor os indicadores.`,
+      mensagem: `Incorporar o lançamento da ${rotuloFicha(linha)} — "${linha.descricao}" (${moeda(linha.essencial)}) ao quadro oficial? O valor passará a compor os indicadores.`,
       rotuloConfirmar: 'Incorporar',
       testid: 'modal-incorporar-pendente'
     });
@@ -731,7 +743,7 @@
   async function excluirPendente(secretaria, linha) {
     const confirmado = await modal.confirmar({
       titulo: 'Excluir lançamento fora do quadro',
-      mensagem: `Excluir o lançamento da ficha ${linha.ficha} (${linha.despesa}) — "${linha.descricao || 'sem descrição'}"?`,
+      mensagem: `Excluir o lançamento da ${rotuloFicha(linha)}${linha.despesa ? ` (${linha.despesa})` : ''} — "${rotuloDescricao(linha)}"?`,
       rotuloConfirmar: 'Excluir',
       perigo: true,
       testid: 'modal-excluir-pendente'
@@ -748,7 +760,16 @@
    */
   function secaoPendentes(secretaria) {
     const { pendentes } = secretaria;
-    const descreve = (l) => `ficha ${l.ficha} ${l.descricao}`;
+    const descreve = (l) => `${rotuloFicha(l)} ${rotuloDescricao(l)}`;
+    // v1.7: "Novo" = criado e ainda não salvo novamente (gera o indicador no menu lateral);
+    // "Incompleto" = ainda não cumpre as regras para incorporar.
+    const status = (l) => criar('div', {
+      classe: 'tabela__acoes',
+      filhos: [
+        l.novo ? criar('span', { classe: 'selo selo--novo', testid: `pendente-novo-${l.id}`, texto: 'Novo', attrs: { title: 'Lançamento novo: o indicador no menu some ao salvar o rascunho.' } }) : null,
+        validarIncorporacao(l).valido ? null : criar('span', { classe: 'selo selo--aviso', testid: `pendente-incompleto-${l.id}`, texto: 'Incompleto', attrs: { title: 'Campos obrigatórios pendentes: complete o rascunho para incorporá-lo ao quadro.' } })
+      ].filter(Boolean)
+    });
     return criar('section', {
       classe: 'cartao',
       testid: 'secretaria-pendentes',
@@ -760,12 +781,13 @@
             botao({ rotulo: '+ Novo lançamento fora do quadro', variante: 'secundario', testid: 'btn-novo-pendente', aoClicar: () => abrirFormularioLinha(secretaria, null, { modo: 'pendente' }) })
           ]
         }),
-        criar('p', { classe: 'cartao__descricao', texto: 'Rascunhos de lançamentos futuros. Não afetam indicadores, situação das fichas nem consultas até serem incorporados ao quadro.' }),
+        criar('p', { classe: 'cartao__descricao', texto: 'Rascunhos de lançamentos futuros. Podem ser salvos incompletos; para incorporá-los ao quadro, os campos obrigatórios precisam estar preenchidos corretamente. Não afetam indicadores, situação das fichas nem consultas até serem incorporados.' }),
         pendentes.length ? tabela({
           testid: 'tabela-pendentes',
           legenda: 'Lançamentos fora do quadro',
           colunas: [
             ...COLUNAS_BASE.slice(0, 7),
+            { rotulo: 'Status', render: status },
             {
               rotulo: 'Ações',
               render: (l) => criar('div', {
